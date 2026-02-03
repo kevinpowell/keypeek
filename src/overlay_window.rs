@@ -1,5 +1,6 @@
 use crate::keyboard::Keyboard;
-use crate::keycode_labels::{self, KeycodeKind, KeycodeLabel};
+use crate::keycode_labels::KeycodeKind;
+use crate::layout_key::LayoutKey;
 use crate::settings::WindowPosition;
 
 use eframe::egui::{self, Align2, Window};
@@ -30,7 +31,7 @@ impl Overlay {
     fn generate_key_label_galleys(
         &self,
         ui: &egui::Ui,
-        keycode_label: KeycodeLabel,
+        key: &LayoutKey,
         rect: egui::Rect,
         font: egui::FontId,
         color: egui::Color32,
@@ -41,13 +42,13 @@ impl Overlay {
             |galley: &std::sync::Arc<egui::Galley>, max: f32| galley.rect.width() <= max;
         let max_width = rect.width() * 0.85;
 
-        if let Some(symbol) = keycode_label.symbol {
+        if let Some(symbol) = &key.symbol {
             let symbol_font = egui::FontId::proportional(0.33 * self.size);
-            let symbol_galley = create_galley(symbol, symbol_font);
+            let symbol_galley = create_galley(symbol.clone(), symbol_font);
 
-            // Try to fit symbol + long label
-            if let Some(long) = keycode_label.long {
-                let text_galley = create_galley(long, font.clone());
+            // Try to fit symbol + tap (long) label
+            if !key.tap.is_empty() {
+                let text_galley = create_galley(key.tap.clone(), font.clone());
                 let gap = 0.06 * self.size;
                 let total_width = symbol_galley.rect.width() + gap + text_galley.rect.width();
                 if total_width <= max_width {
@@ -59,8 +60,8 @@ impl Overlay {
             }
 
             // Try to fit symbol + short label
-            if let Some(short) = keycode_label.short {
-                let text_galley = create_galley(short, font.clone());
+            if let Some(short) = &key.short {
+                let text_galley = create_galley(short.clone(), font.clone());
                 let gap = 0.06 * self.size;
                 let total_width = symbol_galley.rect.width() + gap + text_galley.rect.width();
                 if total_width <= max_width {
@@ -78,9 +79,8 @@ impl Overlay {
             };
         }
 
-        // Try fitting long label
-        let long_label = keycode_label.long.unwrap_or_default();
-        let full_galley = create_galley(long_label.clone(), font.clone());
+        // Try fitting tap (long) label
+        let full_galley = create_galley(key.tap.clone(), font.clone());
         if fits_width(&full_galley, max_width) {
             return LabelGalleys {
                 symbol: None,
@@ -88,19 +88,18 @@ impl Overlay {
             };
         }
 
-        // Try fitting short label or truncated long label
-        let mut truncated = if keycode_label.short.is_some() {
-            let short_label = keycode_label.short.unwrap_or_default();
-            let short_galley = create_galley(short_label.clone(), font.clone());
+        // Try fitting short label or truncated tap label
+        let mut truncated = if let Some(short) = &key.short {
+            let short_galley = create_galley(short.clone(), font.clone());
             if fits_width(&short_galley, max_width) {
                 return LabelGalleys {
                     symbol: None,
                     text: Some(short_galley),
                 };
             }
-            short_label
+            short.clone()
         } else {
-            long_label
+            key.tap.clone()
         };
 
         while truncated.len() > 1 {
@@ -246,23 +245,23 @@ impl eframe::App for Overlay {
                         .keyboard
                         .get_effective_key_layer(key.row as usize, key.col as usize);
 
-                    let bytes = self.keyboard.get_keycode(
-                        effective_layer as usize,
-                        key.row as usize,
-                        key.col as usize,
-                    );
-                    let keycode_label = keycode_labels::get_keycode_label(bytes);
+                    // Get the LayoutKey directly (already contains display labels)
+                    let layout_key = self
+                        .keyboard
+                        .get_key(effective_layer as usize, key.row as usize, key.col as usize)
+                        .unwrap_or_default();
 
-                    let first_layer_bytes =
-                        self.keyboard
-                            .get_keycode(0, key.row as usize, key.col as usize);
-                    let first_layer_keycode_kind =
-                        keycode_labels::get_keycode_label(first_layer_bytes).kind;
+                    // Get layer 0 key's kind for coloring
+                    let first_layer_key_kind = self
+                        .keyboard
+                        .get_key(0, key.row as usize, key.col as usize)
+                        .map(|k| k.kind)
+                        .unwrap_or(KeycodeKind::Basic);
 
                     let (fill_color, stroke_color, border_thickness, font_color) = self
                         .get_keycode_color(
-                            keycode_label.layer_ref.unwrap_or(effective_layer),
-                            first_layer_keycode_kind,
+                            layout_key.layer_ref.unwrap_or(effective_layer),
+                            first_layer_key_kind,
                             is_background_key,
                             self.keyboard
                                 .is_key_pressed(key.row as usize, key.col as usize),
@@ -286,7 +285,7 @@ impl eframe::App for Overlay {
                     let font = egui::FontId::proportional(0.25 * self.size);
                     match self.generate_key_label_galleys(
                         ui,
-                        keycode_label,
+                        &layout_key,
                         rect,
                         font.clone(),
                         font_color,

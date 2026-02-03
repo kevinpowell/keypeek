@@ -2,6 +2,7 @@ pub mod kle_parser;
 pub mod qmk_json_parser;
 pub mod via;
 pub mod vial;
+pub mod zmk_parser;
 
 use std::error::Error;
 

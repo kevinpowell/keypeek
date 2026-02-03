@@ -1,9 +1,9 @@
-use qmk_via_api::keycodes::Keycode;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::key_matrix::KeyMatrix;
+use crate::layout_key::LayoutKey;
 use crate::protocols::{KeyboardLayout, KeyboardProtocol};
 
 pub struct Keyboard {
@@ -35,7 +35,7 @@ impl Keyboard {
         let layer_state = Arc::new(Mutex::new(0));
         let default_layer_state = Arc::new(Mutex::new(0));
         let time_to_hide_overlay = Arc::new(Mutex::new(Some(Instant::now())));
-        let matrix = Arc::new(Mutex::new(KeyMatrix::new(
+        let matrix = Arc::new(Mutex::new(KeyMatrix::from_qmk_keycodes(
             keycodes,
             definition.rows,
             definition.cols,
@@ -105,7 +105,8 @@ impl Keyboard {
             let is_active_default_layer = (default_layer_state & layer_mask) != 0;
             let is_active_momentary_layer = (layer_state & layer_mask) != 0;
             if is_active_momentary_layer || is_active_default_layer {
-                if matrix.get_keycode(i, row, col) != Keycode::KC_TRANSPARENT as u16 {
+                // Use new LayoutKey-based transparency check
+                if !matrix.is_transparent(i, row, col) {
                     return (i as u8, is_active_default_layer && active_layer_above);
                 }
             }
@@ -115,8 +116,9 @@ impl Keyboard {
         (0, active_layer_above)
     }
 
-    pub fn get_keycode(&self, layer: usize, row: usize, col: usize) -> u16 {
-        self.matrix.lock().unwrap().get_keycode(layer, row, col)
+    /// Get the LayoutKey at a position. Returns None for transparent keys.
+    pub fn get_key(&self, layer: usize, row: usize, col: usize) -> Option<LayoutKey> {
+        self.matrix.lock().unwrap().get_key(layer, row, col).cloned()
     }
 
     pub fn is_key_pressed(&self, row: usize, col: usize) -> bool {

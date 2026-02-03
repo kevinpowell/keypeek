@@ -2,6 +2,7 @@
 mod key_matrix;
 mod keyboard;
 mod keycode_labels;
+mod layout_key;
 mod overlay_window;
 mod protocols;
 mod settings;
@@ -104,7 +105,10 @@ fn try_to_launch_overlay(settings: &Settings) -> bool {
         ProtocolType::Vial => {
             let parts: Vec<&str> = settings.device_identifier.split(':').collect();
             if parts.len() != 2 {
-                eprintln!("Invalid VIAL device ID format: {}", settings.device_identifier);
+                eprintln!(
+                    "Invalid VIAL device ID format: {}",
+                    settings.device_identifier
+                );
                 return false;
             }
             let vid = match u16::from_str_radix(parts[0], 16) {
@@ -123,22 +127,16 @@ fn try_to_launch_overlay(settings: &Settings) -> bool {
                 }
             }
         }
-        ProtocolType::Via => {
-            match ViaProtocol::connect(&settings.device_identifier) {
-                Ok(p) => Box::new(p),
-                Err(e) => {
-                    eprintln!("Failed to connect to VIA device: {e}");
-                    return false;
-                }
+        ProtocolType::Via => match ViaProtocol::connect(&settings.device_identifier) {
+            Ok(p) => Box::new(p),
+            Err(e) => {
+                eprintln!("Failed to connect to VIA device: {e}");
+                return false;
             }
-        }
+        },
     };
 
-    let keyboard = match Keyboard::new(
-        protocol,
-        settings.layout_name.clone(),
-        settings.timeout,
-    ) {
+    let keyboard = match Keyboard::new(protocol, settings.layout_name.clone(), settings.timeout) {
         Ok(kb) => kb,
         Err(e) => {
             eprintln!("Failed to create keyboard: {e}");
