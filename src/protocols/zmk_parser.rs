@@ -81,16 +81,8 @@ impl ZmkKeymap {
         content: &str,
         behaviors: &BehaviorRegistry,
     ) -> Result<(), Box<dyn Error>> {
-        // Find keymap node: keymap { compatible = "zmk,keymap"; ... }
-        let keymap_re =
-            Regex::new(r#"(?s)keymap\s*\{[^}]*compatible\s*=\s*"zmk,keymap"\s*;(.*?)\n\s*\};"#)
-                .unwrap();
-
-        let keymap_match = keymap_re
-            .captures(content)
+        let keymap_content = find_node_with_compatible(content, "keymap", "zmk,keymap")
             .ok_or("Could not find keymap node with compatible = \"zmk,keymap\"")?;
-
-        let keymap_content = keymap_match.get(1).unwrap().as_str();
 
         // Find layer nodes within keymap
         // Pattern: layer_name { bindings = <...>; };
@@ -118,16 +110,9 @@ impl ZmkKeymap {
         content: &str,
         behaviors: &BehaviorRegistry,
     ) -> Result<(), Box<dyn Error>> {
-        // Find combos node: combos { compatible = "zmk,combos"; ... }
-        let combos_re =
-            Regex::new(r#"(?s)combos\s*\{[^}]*compatible\s*=\s*"zmk,combos"\s*;(.*?)\n\s*\};"#)
-                .unwrap();
-
-        let Some(combos_match) = combos_re.captures(content) else {
+        let Some(combos_content) = find_node_with_compatible(content, "combos", "zmk,combos") else {
             return Ok(()); // No combos section is fine
         };
-
-        let combos_content = combos_match.get(1).unwrap().as_str();
 
         // Find individual combo definitions
         // Pattern: combo_name { key-positions = <...>; bindings = <...>; [layers = <...>;] };
@@ -203,6 +188,84 @@ impl ZmkKeymap {
             })
             .collect()
     }
+}
+
+fn find_node_with_compatible<'a>(
+    content: &'a str,
+    node_name: &str,
+    compatible: &str,
+) -> Option<&'a str> {
+    let compatible_marker = format!("compatible = \"{}\"", compatible);
+    let mut search_from = 0;
+
+    while let Some((start, end)) = find_node_block_from(content, node_name, search_from) {
+        let block = &content[start..end];
+        if block.contains(&compatible_marker) {
+            return Some(block);
+        }
+        search_from = end;
+    }
+
+    None
+}
+
+fn find_node_block_from(content: &str, node_name: &str, search_from: usize) -> Option<(usize, usize)> {
+    let mut offset = search_from;
+    while let Some(rel_idx) = content[offset..].find(node_name) {
+        let name_idx = offset + rel_idx;
+
+        if is_ident_char_before(content, name_idx) || is_ident_char_after(content, name_idx + node_name.len()) {
+            offset = name_idx + node_name.len();
+            continue;
+        }
+
+        let after_name = &content[name_idx + node_name.len()..];
+        let brace_rel = after_name.find('{')?;
+        let brace_idx = name_idx + node_name.len() + brace_rel;
+
+        let mut depth = 0usize;
+        for (i, ch) in content[brace_idx..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some((brace_idx + 1, brace_idx + i));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        return None;
+    }
+
+    None
+}
+
+fn is_ident_char_before(content: &str, idx: usize) -> bool {
+    if idx == 0 {
+        return false;
+    }
+    content
+        .as_bytes()
+        .get(idx - 1)
+        .copied()
+        .map(is_ident_char)
+        .unwrap_or(false)
+}
+
+fn is_ident_char_after(content: &str, idx: usize) -> bool {
+    content
+        .as_bytes()
+        .get(idx)
+        .copied()
+        .map(is_ident_char)
+        .unwrap_or(false)
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// Physical layout data parsed from a ZMK .overlay file
@@ -949,6 +1012,34 @@ mod tests {
         assert!(keys[0].is_none()); // transparent
         assert!(keys[1].is_some()); // A
         assert!(keys[2].is_none()); // transparent
+    }
+
+    #[test]
+    fn test_parse_multiple_layers() {
+        let content = r#"
+            keymap {
+                compatible = "zmk,keymap";
+
+                default_layer {
+                    bindings = <&kp A &kp B>;
+                };
+
+                nav_layer {
+                    bindings = <&kp C &kp D>;
+                };
+            };
+        "#;
+
+        let keymap = ZmkKeymap::parse(content).unwrap();
+        assert_eq!(keymap.layer_order, vec!["default_layer", "nav_layer"]);
+        assert_eq!(
+            keymap.layers.get("nav_layer").unwrap()[0]
+                .as_ref()
+                .unwrap()
+                .tap
+                .full,
+            "C"
+        );
     }
 
     #[test]
