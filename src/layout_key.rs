@@ -9,8 +9,7 @@
 //! `Vec<Vec<Vec<Option<LayoutKey>>>>`. This makes layer fall-through logic simple:
 //! just check `key.is_some()`.
 
-use crate::keycode_labels::get_layout_key;
-use qmk_via_api::keycodes::Keycode;
+// ...existing code...
 
 /// Visual classification for key coloring.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
@@ -58,13 +57,13 @@ impl Label {
 
 impl From<&str> for Label {
     fn from(s: &str) -> Self {
-        Label::new(s)
+        s.into()
     }
 }
 
 impl From<String> for Label {
     fn from(s: String) -> Self {
-        Label::new(s)
+        s.into()
     }
 }
 
@@ -99,49 +98,5 @@ impl Default for LayoutKey {
             kind: KeycodeKind::Basic,
             layer_ref: None,
         }
-    }
-}
-
-impl LayoutKey {
-    /// Create a LayoutKey from a QMK keycode.
-    ///
-    /// Returns `None` for `KC_TRANSPARENT` (0x0001), which should be represented
-    /// as `None` in the key matrix to enable proper layer fall-through.
-    pub fn from_qmk_keycode(keycode: u16) -> Option<Self> {
-        // KC_TRANSPARENT is special: return None to represent transparency
-        if keycode == Keycode::KC_TRANSPARENT as u16 {
-            return None;
-        }
-
-        get_layout_key(keycode)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_from_qmk_keycode_basic() {
-        let key = LayoutKey::from_qmk_keycode(Keycode::KC_A as u16);
-        assert!(key.is_some());
-        let key = key.unwrap();
-        assert_eq!(key.tap.full, "A");
-        assert_eq!(key.kind, KeycodeKind::Basic);
-    }
-
-    #[test]
-    fn test_from_qmk_keycode_transparent() {
-        let key = LayoutKey::from_qmk_keycode(Keycode::KC_TRANSPARENT as u16);
-        assert!(key.is_none());
-    }
-
-    #[test]
-    fn test_from_qmk_keycode_no() {
-        let key = LayoutKey::from_qmk_keycode(Keycode::KC_NO as u16);
-        assert!(key.is_some());
-        // KC_NO should produce an empty tap label
-        let key = key.unwrap();
-        assert_eq!(key.tap.full, "");
     }
 }

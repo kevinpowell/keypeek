@@ -7,30 +7,7 @@ pub struct KeyMatrix {
 }
 
 impl KeyMatrix {
-    /// Create a KeyMatrix from raw QMK keycodes (used by VIA/VIAL protocols)
-    pub fn from_qmk_keycodes(keycodes: Vec<Vec<Vec<u16>>>, rows: usize, cols: usize) -> Self {
-        // Convert keycodes to LayoutKey during construction
-        let keys = keycodes
-            .iter()
-            .map(|layer| {
-                layer
-                    .iter()
-                    .map(|row| {
-                        row.iter()
-                            .map(|&keycode| LayoutKey::from_qmk_keycode(keycode))
-                            .collect()
-                    })
-                    .collect()
-            })
-            .collect();
-
-        KeyMatrix {
-            keys,
-            pressed: vec![vec![false; cols]; rows],
-        }
-    }
-
-    /// Create a KeyMatrix directly from LayoutKey data (used by ZMK parser)
+    /// Create a KeyMatrix from pre-resolved LayoutKey data.
     pub fn from_layout_keys(
         keys: Vec<Vec<Vec<Option<LayoutKey>>>>,
         rows: usize,

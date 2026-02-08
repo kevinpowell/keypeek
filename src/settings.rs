@@ -86,8 +86,7 @@ impl FromStr for WindowPosition {
 #[derive(Clone)]
 pub struct Settings {
     pub protocol_type: ProtocolType,
-    pub device_identifier: String,
-    pub keymap_path: String,
+    pub protocol_config: String,
     pub layout_name: String,
     pub size: i32,
     pub position: WindowPosition,
@@ -101,8 +100,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             protocol_type: ProtocolType::default(),
-            device_identifier: String::new(),
-            keymap_path: String::new(),
+            protocol_config: String::new(),
             layout_name: "LAYOUT".to_string(),
             size: 60,
             position: WindowPosition::BottomRight,
@@ -119,8 +117,7 @@ impl Settings {
         let mut conf = Ini::new();
         let mut section = conf.with_section(Some("settings"));
         section.set("protocol_type", self.protocol_type.to_string());
-        section.set("device_identifier", &self.device_identifier);
-        section.set("keymap_path", &self.keymap_path);
+        section.set("protocol_config", &self.protocol_config);
         section.set("layout_name", &self.layout_name);
         section.set("size", self.size.to_string());
         section.set("position", self.position.to_string());
@@ -138,11 +135,8 @@ impl Settings {
                 s.protocol_type = parsed;
             }
         }
-        if let Some(val) = section.get("device_identifier") {
-            s.device_identifier = val.to_string();
-        }
-        if let Some(val) = section.get("keymap_path") {
-            s.keymap_path = val.to_string();
+        if let Some(val) = section.get("protocol_config") {
+            s.protocol_config = val.to_string();
         }
         if let Some(val) = section.get("layout_name") {
             s.layout_name = val.to_string();

@@ -38,6 +38,7 @@ pub struct ZmkKeymap {
 }
 
 /// A ZMK combo definition
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ZmkCombo {
     /// Key positions that trigger the combo
@@ -172,30 +173,6 @@ impl ZmkKeymap {
         }
 
         Ok(())
-    }
-
-    /// Convert the keymap to a 3D key matrix suitable for KeyMatrix::from_layout_keys()
-    ///
-    /// Note: ZMK keymaps don't have matrix row/col info, so this creates a flat
-    /// representation where all keys are in a single "row" per layer.
-    pub fn to_flat_matrix(&self) -> Vec<Vec<Vec<Option<LayoutKey>>>> {
-        self.layer_order
-            .iter()
-            .map(|name| {
-                let keys = self.layers.get(name).cloned().unwrap_or_default();
-                vec![keys] // Single row containing all keys
-            })
-            .collect()
-    }
-
-    /// Get layer names in order
-    pub fn layer_names(&self) -> &[String] {
-        &self.layer_order
-    }
-
-    /// Get the number of keys per layer (assumes all layers have same count)
-    pub fn keys_per_layer(&self) -> usize {
-        self.layers.values().next().map(|v| v.len()).unwrap_or(0)
     }
 
     /// Convert the keymap to a 3D key matrix placed at proper (row, col) positions.
@@ -561,7 +538,7 @@ fn binding_to_layout_key(
             // Key toggle: &kt A
             let key_name = params.first().copied().unwrap_or("");
             Some(LayoutKey {
-                tap: Label::new(format!("⇅{}", zmk_key_to_label(key_name))),
+                tap: format!("⇅{}", zmk_key_to_label(key_name)).into(),
                 kind: KeycodeKind::Modifier,
                 ..Default::default()
             })
@@ -571,7 +548,7 @@ fn binding_to_layout_key(
             // Momentary layer: &mo 1
             let layer = params.first().copied().unwrap_or("?");
             Some(LayoutKey {
-                tap: Label::new(format!("L{}", layer)),
+                tap: format!("L{}", layer).into(),
                 kind: KeycodeKind::Modifier,
                 layer_ref: layer.parse().ok(),
                 ..Default::default()
@@ -582,7 +559,7 @@ fn binding_to_layout_key(
             // To layer: &to 1
             let layer = params.first().copied().unwrap_or("?");
             Some(LayoutKey {
-                tap: Label::new(format!("→L{}", layer)),
+                tap: format!("→L{}", layer).into(),
                 kind: KeycodeKind::Modifier,
                 layer_ref: layer.parse().ok(),
                 ..Default::default()
@@ -593,7 +570,7 @@ fn binding_to_layout_key(
             // Toggle layer: &tog 1
             let layer = params.first().copied().unwrap_or("?");
             Some(LayoutKey {
-                tap: Label::new(format!("⇅L{}", layer)),
+                tap: format!("⇅L{}", layer).into(),
                 kind: KeycodeKind::Modifier,
                 layer_ref: layer.parse().ok(),
                 ..Default::default()
@@ -604,8 +581,8 @@ fn binding_to_layout_key(
             // Sticky layer: &sl 1
             let layer = params.first().copied().unwrap_or("?");
             Some(LayoutKey {
-                tap: Label::new(format!("L{}", layer)),
-                hold: Some(Label::new("sticky")),
+                tap: format!("L{}", layer).into(),
+                hold: Some("sticky".into()),
                 kind: KeycodeKind::Modifier,
                 layer_ref: layer.parse().ok(),
                 ..Default::default()
@@ -617,7 +594,7 @@ fn binding_to_layout_key(
             let key_name = params.first().copied().unwrap_or("");
             Some(LayoutKey {
                 tap: zmk_key_to_label(key_name).into(),
-                hold: Some(Label::new("sticky")),
+                hold: Some("sticky".into()),
                 kind: KeycodeKind::Modifier,
                 ..Default::default()
             })
@@ -637,7 +614,7 @@ fn binding_to_layout_key(
                 })
             } else {
                 Some(LayoutKey {
-                    tap: Label::new("mt?"),
+                    tap: "mt?".into(),
                     ..Default::default()
                 })
             }
@@ -650,7 +627,7 @@ fn binding_to_layout_key(
                 let tap_key = params[1];
                 Some(LayoutKey {
                     tap: zmk_key_to_label(tap_key).into(),
-                    hold: Some(Label::new(format!("L{}", layer))),
+                    hold: Some(format!("L{}", layer).into()),
                     kind: KeycodeKind::Modifier,
                     layer_ref: layer.parse().ok(),
                     symbol: zmk_key_to_symbol(tap_key),
@@ -658,7 +635,7 @@ fn binding_to_layout_key(
                 })
             } else {
                 Some(LayoutKey {
-                    tap: Label::new("lt?"),
+                    tap: "lt?".into(),
                     ..Default::default()
                 })
             }
@@ -701,25 +678,25 @@ fn binding_to_layout_key(
         }
 
         "reset" | "sys_reset" => Some(LayoutKey {
-            tap: Label::new("Reset"),
+            tap: "Reset".into(),
             kind: KeycodeKind::Special,
             ..Default::default()
         }),
 
         "bootloader" => Some(LayoutKey {
-            tap: Label::new("Boot"),
+            tap: "Boot".into(),
             kind: KeycodeKind::Special,
             ..Default::default()
         }),
 
         "caps_word" => Some(LayoutKey {
-            tap: Label::new("CapsW"),
+            tap: "CapsW".into(),
             kind: KeycodeKind::Modifier,
             ..Default::default()
         }),
 
         "key_repeat" => Some(LayoutKey {
-            tap: Label::new("Repeat"),
+            tap: "Repeat".into(),
             kind: KeycodeKind::Special,
             symbol: Some(egui_phosphor::regular::REPEAT.to_string()),
             ..Default::default()

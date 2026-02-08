@@ -12,11 +12,8 @@ mod tray;
 use eframe::egui::{self, IconData};
 use keyboard::Keyboard;
 use overlay_window::Overlay;
-use protocols::via::ViaProtocol;
-use protocols::vial::VialProtocol;
-use protocols::zmk::ZmkProtocol;
-use protocols::KeyboardProtocol;
-use settings::{ProtocolType, Settings};
+use protocols::connect_protocol;
+use settings::Settings;
 use settings_window::SettingsApp;
 use std::sync::{Arc, Mutex};
 
@@ -102,63 +99,11 @@ fn show_settings_window() -> Option<Settings> {
 }
 
 fn try_to_launch_overlay(settings: &Settings) -> bool {
-    let protocol: Box<dyn KeyboardProtocol> = match settings.protocol_type {
-        ProtocolType::Vial => {
-            let parts: Vec<&str> = settings.device_identifier.split(':').collect();
-            if parts.len() != 2 {
-                eprintln!(
-                    "Invalid VIAL device ID format: {}",
-                    settings.device_identifier
-                );
-                return false;
-            }
-            let vid = match u16::from_str_radix(parts[0], 16) {
-                Ok(v) => v,
-                Err(_) => return false,
-            };
-            let pid = match u16::from_str_radix(parts[1], 16) {
-                Ok(p) => p,
-                Err(_) => return false,
-            };
-            match VialProtocol::connect(vid, pid) {
-                Ok(p) => Box::new(p),
-                Err(e) => {
-                    eprintln!("Failed to connect to VIAL device: {e}");
-                    return false;
-                }
-            }
-        }
-        ProtocolType::Via => match ViaProtocol::connect(&settings.device_identifier) {
-            Ok(p) => Box::new(p),
-            Err(e) => {
-                eprintln!("Failed to connect to VIA device: {e}");
-                return false;
-            }
-        },
-        ProtocolType::Zmk => {
-            let parts: Vec<&str> = settings.device_identifier.split(':').collect();
-            if parts.len() != 2 {
-                eprintln!(
-                    "Invalid ZMK device ID format: {}",
-                    settings.device_identifier
-                );
-                return false;
-            }
-            let vid = match u16::from_str_radix(parts[0], 16) {
-                Ok(v) => v,
-                Err(_) => return false,
-            };
-            let pid = match u16::from_str_radix(parts[1], 16) {
-                Ok(p) => p,
-                Err(_) => return false,
-            };
-            match ZmkProtocol::connect(vid, pid, &settings.keymap_path) {
-                Ok(p) => Box::new(p),
-                Err(e) => {
-                    eprintln!("Failed to connect to ZMK device: {e}");
-                    return false;
-                }
-            }
+    let protocol = match connect_protocol(settings.protocol_type, &settings.protocol_config) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Failed to connect to device: {e}");
+            return false;
         }
     };
 

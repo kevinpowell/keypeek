@@ -1,8 +1,4 @@
-use crate::protocols::qmk_json_parser;
-use crate::protocols::via::ViaProtocol;
-use crate::protocols::vial::VialProtocol;
-use crate::protocols::zmk_parser;
-use crate::protocols::KeyboardProtocol;
+use crate::protocols::{connect_protocol, format_vid_pid};
 use crate::settings::ProtocolType;
 use crate::settings::Settings;
 use crate::settings::WindowPosition;
@@ -27,9 +23,22 @@ pub struct SettingsApp {
 impl SettingsApp {
     pub fn new(shared: Arc<Mutex<Settings>>) -> Self {
         let current = shared.lock().map(|s| s.clone()).unwrap_or_default();
+        // Split protocol_config into UI fields based on protocol type
+        let (json_path, zmk_config_path) = match current.protocol_type {
+            ProtocolType::Via => (current.protocol_config.clone(), String::new()),
+            ProtocolType::Vial => (current.protocol_config.clone(), String::new()),
+            ProtocolType::Zmk => {
+                // ZMK config format: "vid:pid|config_dir"
+                if let Some((_vid_pid, config_dir)) = current.protocol_config.split_once('|') {
+                    (current.protocol_config.split('|').next().unwrap_or("").to_string(), config_dir.to_string())
+                } else {
+                    (String::new(), current.protocol_config.clone())
+                }
+            }
+        };
         let mut app = Self {
-            json_path: current.device_identifier.clone(),
-            zmk_config_path: current.keymap_path.clone(),
+            json_path,
+            zmk_config_path,
             protocol_type: current.protocol_type,
             current,
             shared,
@@ -56,74 +65,42 @@ impl SettingsApp {
             self.connected = false;
             self.layout_names.clear();
 
+            let vid_pid = format_vid_pid(device.vendor_id, device.product_id);
+
             // Auto-detect VIAL unless user has manually selected ZMK
             if self.protocol_type != ProtocolType::Zmk {
-                let vial_result = VialProtocol::connect(device.vendor_id, device.product_id);
+                let vial_result =
+                    connect_protocol(ProtocolType::Vial, &vid_pid);
                 if vial_result.is_ok() {
                     self.protocol_type = ProtocolType::Vial;
-                    self.json_path =
-                        format!("{:04x}:{:04x}", device.vendor_id, device.product_id);
+                    self.json_path = vid_pid;
                 } else {
                     self.protocol_type = ProtocolType::Via;
                     self.json_path = String::new();
                 }
-                drop(vial_result);
             } else {
-                self.json_path =
-                    format!("{:04x}:{:04x}", device.vendor_id, device.product_id);
+                self.json_path = vid_pid;
             }
             self.error = None;
         }
     }
 
     fn connect(&mut self) {
-        let Some(device) = self
-            .selected_device_index
-            .and_then(|i| self.available_devices.get(i))
-        else {
+        if self.selected_device_index.is_none() {
             self.error = Some("No device selected".to_string());
             return;
-        };
+        }
 
-        match self.protocol_type {
-            ProtocolType::Vial => {
-                match VialProtocol::connect(device.vendor_id, device.product_id) {
-                    Ok(vial) => {
-                        self.current.protocol_type = ProtocolType::Vial;
-                        self.current.device_identifier =
-                            format!("{:04x}:{:04x}", device.vendor_id, device.product_id);
-                        self.layout_names = vial.get_layout_definition().get_layout_names();
-                        self.connected = true;
-                        self.error = None;
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to connect via VIAL: {e}"));
-                    }
-                }
-            }
+        // Build protocol_config from UI fields
+        let protocol_config = match self.protocol_type {
+            ProtocolType::Vial => self.json_path.trim().to_string(),
             ProtocolType::Via => {
                 let path = self.json_path.trim();
                 if path.is_empty() {
                     self.error = Some("Please provide a JSON config file path".to_string());
                     return;
                 }
-
-                match qmk_json_parser::parse_qmk_json(path) {
-                    Ok(definition) => {
-                        if let Err(e) = ViaProtocol::connect(path) {
-                            self.error = Some(format!("Failed to connect via VIA: {e}"));
-                            return;
-                        }
-                        self.current.protocol_type = ProtocolType::Via;
-                        self.current.device_identifier = path.to_string();
-                        self.layout_names = definition.get_layout_names();
-                        self.connected = true;
-                        self.error = None;
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to parse JSON config: {e}"));
-                    }
-                }
+                path.to_string()
             }
             ProtocolType::Zmk => {
                 let config_dir = self.zmk_config_path.trim();
@@ -131,23 +108,22 @@ impl SettingsApp {
                     self.error = Some("Please provide a ZMK config directory path".to_string());
                     return;
                 }
+                let vid_pid = self.json_path.trim();
+                format!("{}|{}", vid_pid, config_dir)
+            }
+        };
 
-                match zmk_parser::parse_zmk_config_dir(config_dir) {
-                    Ok((physical_layout, _keymap)) => {
-                        let definition = physical_layout
-                            .to_keyboard_definition(device.vendor_id, device.product_id);
-                        self.current.protocol_type = ProtocolType::Zmk;
-                        self.current.device_identifier =
-                            format!("{:04x}:{:04x}", device.vendor_id, device.product_id);
-                        self.current.keymap_path = config_dir.to_string();
-                        self.layout_names = definition.get_layout_names();
-                        self.connected = true;
-                        self.error = None;
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to parse ZMK config: {e}"));
-                    }
-                }
+        // Use factory to connect and validate
+        match connect_protocol(self.protocol_type, &protocol_config) {
+            Ok(protocol) => {
+                self.current.protocol_type = self.protocol_type;
+                self.current.protocol_config = protocol_config;
+                self.layout_names = protocol.get_layout_definition().get_layout_names();
+                self.connected = true;
+                self.error = None;
+            }
+            Err(e) => {
+                self.error = Some(format!("Failed to connect: {e}"));
             }
         }
 
@@ -424,8 +400,7 @@ impl eframe::App for SettingsApp {
                         {
                             if let Ok(mut settings) = self.shared.lock() {
                                 settings.protocol_type = self.current.protocol_type;
-                                settings.device_identifier = self.current.device_identifier.clone();
-                                settings.keymap_path = self.current.keymap_path.clone();
+                                settings.protocol_config = self.current.protocol_config.clone();
                                 settings.layout_name = self.current.layout_name.clone();
                                 settings.size = self.current.size;
                                 settings.position = self.current.position;

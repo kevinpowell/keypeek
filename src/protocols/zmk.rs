@@ -51,18 +51,13 @@ impl KeyboardProtocol for ZmkProtocol {
         Ok(self.layer_count)
     }
 
-    fn read_all_keycodes(&self, _layers: usize, _rows: usize, _cols: usize) -> Vec<Vec<Vec<u16>>> {
-        // TODO: Implement via ZMK Studio protocol for live keymap sync
-        Vec::new()
+    fn read_all_keys(&self, _layers: usize, _rows: usize, _cols: usize) -> Vec<Vec<Vec<Option<LayoutKey>>>> {
+        self.layout_keys.clone()
     }
 
     fn hid_read(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         self.api
             .hid_read()
             .map_err(|e| format!("HID read error: {e}").into())
-    }
-
-    fn get_layout_keys(&self) -> Option<Vec<Vec<Vec<Option<LayoutKey>>>>> {
-        Some(self.layout_keys.clone())
     }
 }

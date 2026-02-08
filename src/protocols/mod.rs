@@ -6,7 +6,12 @@ pub mod zmk;
 pub mod zmk_parser;
 
 use crate::layout_key::LayoutKey;
+use crate::settings::ProtocolType;
 use std::error::Error;
+
+use self::via::ViaProtocol;
+use self::vial::VialProtocol;
+use self::zmk::ZmkProtocol;
 
 pub type Row = usize;
 pub type Column = usize;
@@ -63,13 +68,70 @@ pub trait KeyboardProtocol: Send {
 
     fn get_layer_count(&self) -> Result<usize, Box<dyn Error>>;
 
-    fn read_all_keycodes(&self, layers: usize, rows: usize, cols: usize) -> Vec<Vec<Vec<u16>>>;
+    /// Read all keys from the keyboard, returning LayoutKey data for each position.
+    ///
+    /// VIA/VIAL read raw keycodes via HID and convert them internally.
+    /// ZMK returns pre-parsed data from config files.
+    fn read_all_keys(
+        &self,
+        layers: usize,
+        rows: usize,
+        cols: usize,
+    ) -> Vec<Vec<Vec<Option<LayoutKey>>>>;
 
     fn hid_read(&self) -> Result<Vec<u8>, Box<dyn Error>>;
+}
 
-    /// Return pre-parsed LayoutKey data if available (e.g., from ZMK keymap files).
-    /// When Some, Keyboard::new() will use this instead of read_all_keycodes().
-    fn get_layout_keys(&self) -> Option<Vec<Vec<Vec<Option<LayoutKey>>>>> {
-        None
+/// Parse a "vid:pid" hex string into (u16, u16).
+pub fn parse_vid_pid(s: &str) -> Result<(u16, u16), Box<dyn Error>> {
+    let (vid_str, pid_str) = s
+        .split_once(':')
+        .ok_or_else(|| format!("Invalid VID:PID format: '{s}'"))?;
+    let vid =
+        u16::from_str_radix(vid_str, 16).map_err(|e| format!("Invalid VID '{vid_str}': {e}"))?;
+    let pid =
+        u16::from_str_radix(pid_str, 16).map_err(|e| format!("Invalid PID '{pid_str}': {e}"))?;
+    Ok((vid, pid))
+}
+
+/// Format a VID:PID pair as a hex string.
+pub fn format_vid_pid(vid: u16, pid: u16) -> String {
+    format!("{:04x}:{:04x}", vid, pid)
+}
+
+/// Parse a ZMK protocol config string into (vid, pid, config_dir).
+fn parse_zmk_config(config: &str) -> Result<(u16, u16, &str), Box<dyn Error>> {
+    let (vid_pid, config_dir) = config
+        .split_once('|')
+        .ok_or("Invalid ZMK config format: expected 'vid:pid|config_dir'")?;
+    let (vid, pid) = parse_vid_pid(vid_pid)?;
+    Ok((vid, pid, config_dir))
+}
+
+/// Create a connected protocol instance from protocol type and config string.
+///
+/// Config string format per protocol:
+/// - VIA: path to QMK keyboard info JSON
+/// - VIAL: "vid:pid" hex string
+/// - ZMK: "vid:pid|/path/to/zmk-config"
+pub fn connect_protocol(
+    protocol_type: ProtocolType,
+    protocol_config: &str,
+) -> Result<Box<dyn KeyboardProtocol>, Box<dyn Error>> {
+    match protocol_type {
+        ProtocolType::Via => {
+            let protocol = ViaProtocol::connect(protocol_config)?;
+            Ok(Box::new(protocol))
+        }
+        ProtocolType::Vial => {
+            let (vid, pid) = parse_vid_pid(protocol_config)?;
+            let protocol = VialProtocol::connect(vid, pid)?;
+            Ok(Box::new(protocol))
+        }
+        ProtocolType::Zmk => {
+            let (vid, pid, config_dir) = parse_zmk_config(protocol_config)?;
+            let protocol = ZmkProtocol::connect(vid, pid, config_dir)?;
+            Ok(Box::new(protocol))
+        }
     }
 }
