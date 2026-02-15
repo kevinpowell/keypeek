@@ -1,5 +1,5 @@
-use crate::keycode_labels::basic::get_basic_layout_key;
-use crate::keycode_labels::constants::*;
+use crate::qmk_keycode_labels::basic::get_basic_layout_key;
+use crate::qmk_keycode_labels::constants::*;
 use crate::layout_key::{KeycodeKind, Label, LayoutKey};
 
 pub fn get_advanced_layout_key(keycode_bytes: u16) -> Option<LayoutKey> {

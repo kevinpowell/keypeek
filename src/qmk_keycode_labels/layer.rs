@@ -1,4 +1,4 @@
-use crate::keycode_labels::constants::*;
+use crate::qmk_keycode_labels::constants::*;
 use crate::layout_key::{Label, LayoutKey};
 
 pub fn get_layer_layout_key(keycode_bytes: u16) -> Option<LayoutKey> {

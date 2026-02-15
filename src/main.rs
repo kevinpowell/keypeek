@@ -1,7 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 mod key_matrix;
 mod keyboard;
-mod keycode_labels;
+mod qmk_keycode_labels;
 mod layout_key;
 mod overlay_window;
 mod protocols;
