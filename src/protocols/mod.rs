@@ -3,7 +3,6 @@ pub mod qmk_json_parser;
 pub mod via;
 pub mod vial;
 pub mod zmk;
-pub mod zmk_proto;
 pub mod zmk_studio;
 
 use crate::layout_key::LayoutKey;

@@ -8,6 +8,7 @@ mod protocols;
 mod settings;
 mod settings_window;
 mod tray;
+mod zmk_keycode_labels;
 
 use eframe::egui::{self, IconData};
 use keyboard::Keyboard;

@@ -20,8 +20,8 @@ egui-phosphor = "0.11.0"
 image = "0.25.9"
 lzma-rs = "0.3"
 regex = "1.12.3"
-prost = "0.13"
 serialport = "4"
+zmk-studio-api = { path = "../zmk-studio-api", features = ["serial"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"

@@ -194,8 +194,10 @@ fn build_from_studio_data(
     };
 
     // Build layout_keys: layers × 1 row × num_keys cols
-    let layer_count = data.keymap.layers.len();
-    let mut layout_keys = Vec::with_capacity(layer_count);
+    // StudioData already has pre-converted layout_keys as Vec<Vec<Option<LayoutKey>>>
+    // (layers × keys). We need to wrap each layer in a single-row vec for the
+    // 3D structure expected by KeyboardProtocol.
+    let layer_count = data.layer_count;
 
     // Get the active layout's key count for binding alignment
     let active_key_count = if active_idx < proto_layouts.len() {
@@ -204,20 +206,22 @@ fn build_from_studio_data(
         num_keys
     };
 
-    for layer in &data.keymap.layers {
+    let mut layout_keys_3d = Vec::with_capacity(layer_count);
+
+    for layer_keys in &data.layout_keys {
         let mut row = vec![None; num_keys];
 
-        for (pos, binding) in layer.bindings.iter().enumerate() {
+        for (pos, key) in layer_keys.iter().enumerate() {
             if pos >= active_key_count {
                 break;
             }
             if pos < num_keys {
-                row[pos] = data.behavior_map.binding_to_layout_key(binding);
+                row[pos] = key.clone();
             }
         }
 
-        layout_keys.push(vec![row]);
+        layout_keys_3d.push(vec![row]);
     }
 
-    Ok((definition, layout_keys, layer_count))
+    Ok((definition, layout_keys_3d, layer_count))
 }
