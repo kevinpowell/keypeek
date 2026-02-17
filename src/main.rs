@@ -1,4 +1,5 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+mod device_discovery;
 mod key_matrix;
 mod keyboard;
 mod qmk_keycode_labels;

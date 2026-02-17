@@ -1,3 +1,4 @@
+use crate::device_discovery::{discover_devices, DeviceKind, DiscoveredDevice};
 use crate::keyboard::Keyboard;
 use crate::layout_key::{KeycodeKind, LayoutKey};
 use crate::protocols::zmk;
@@ -7,7 +8,6 @@ use crate::settings::{ProtocolType, Settings, WindowPosition};
 use crate::tray::TrayCommand;
 
 use eframe::egui::{self, Align2, Window};
-use qmk_via_api::scan::{scan_keyboards, KeyboardDeviceInfo};
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 use tray_icon::TrayIcon;
@@ -17,15 +17,6 @@ const SETTINGS_FILE: &str = "settings.ini";
 struct LabelGalleys {
     symbol: Option<std::sync::Arc<egui::Galley>>,
     text: Option<std::sync::Arc<egui::Galley>>,
-}
-
-struct DeviceEntry {
-    display_name: String,
-    vid: u16,
-    pid: u16,
-    #[allow(dead_code)]
-    hid_info: Option<KeyboardDeviceInfo>,
-    serial_port: Option<String>,
 }
 
 enum AppConnectionState {
@@ -42,7 +33,7 @@ pub struct OverlayApp {
     active_settings: Settings,
     draft_settings: Settings,
     layout_names: Vec<String>,
-    available_devices: Vec<DeviceEntry>,
+    available_devices: Vec<DiscoveredDevice>,
     selected_device_index: Option<usize>,
     protocol_type: ProtocolType,
     json_path: String,
@@ -108,51 +99,8 @@ impl OverlayApp {
     }
 
     fn refresh_devices(&mut self) {
-        self.available_devices.clear();
+        self.available_devices = discover_devices();
         self.selected_device_index = None;
-
-        for dev in scan_keyboards() {
-            self.available_devices.push(DeviceEntry {
-                display_name: dev
-                    .product
-                    .clone()
-                    .unwrap_or_else(|| format!("{:04X}:{:04X}", dev.vendor_id, dev.product_id)),
-                vid: dev.vendor_id,
-                pid: dev.product_id,
-                hid_info: Some(dev),
-                serial_port: None,
-            });
-        }
-
-        for sp in zmk_studio::scan_serial_ports() {
-            let already_listed = self
-                .available_devices
-                .iter()
-                .any(|d| d.vid == sp.vid && d.pid == sp.pid);
-
-            let display_name = sp
-                .product
-                .unwrap_or_else(|| format!("{:04X}:{:04X}", sp.vid, sp.pid));
-
-            if already_listed {
-                if let Some(entry) = self
-                    .available_devices
-                    .iter_mut()
-                    .find(|d| d.vid == sp.vid && d.pid == sp.pid)
-                {
-                    entry.serial_port = Some(sp.port_name);
-                    entry.display_name = format!("{} (Studio)", entry.display_name);
-                }
-            } else {
-                self.available_devices.push(DeviceEntry {
-                    display_name: format!("{} [{}]", display_name, sp.port_name),
-                    vid: sp.vid,
-                    pid: sp.pid,
-                    hid_info: None,
-                    serial_port: Some(sp.port_name),
-                });
-            }
-        }
     }
 
     fn select_device(&mut self, index: usize) {
@@ -161,21 +109,22 @@ impl OverlayApp {
             self.layout_names.clear();
 
             let vid_pid = format_vid_pid(device.vid, device.pid);
-            if device.serial_port.is_some() {
-                self.protocol_type = ProtocolType::Zmk;
-                self.json_path = vid_pid;
-                self.zmk_serial_port = device.serial_port.clone();
-            } else if self.protocol_type != ProtocolType::Zmk {
-                let vial_result = connect_protocol(ProtocolType::Vial, &vid_pid);
-                if vial_result.is_ok() {
-                    self.protocol_type = ProtocolType::Vial;
+            match device.kind {
+                DeviceKind::Studio => {
+                    self.protocol_type = ProtocolType::Zmk;
                     self.json_path = vid_pid;
-                } else {
-                    self.protocol_type = ProtocolType::Via;
-                    self.json_path.clear();
+                    self.zmk_serial_port = device.serial_port.clone();
                 }
-            } else {
-                self.json_path = vid_pid;
+                DeviceKind::Vial => {
+                    self.protocol_type = ProtocolType::Vial;
+                    self.zmk_serial_port = None;
+                    self.json_path = vid_pid;
+                }
+                DeviceKind::Qmk => {
+                    self.protocol_type = ProtocolType::Via;
+                    self.zmk_serial_port = None;
+                    self.json_path = String::new();
+                }
             }
             self.settings_error = None;
         }
@@ -431,42 +380,13 @@ impl OverlayApp {
                         .striped(true)
                         .spacing([25.0, 14.0])
                         .show(ui, |ui| {
-                            ui.label("Protocol");
-                            ui.horizontal(|ui| {
-                                egui::ComboBox::from_id_salt("protocol_combo")
-                                    .width(ui.available_width())
-                                    .selected_text(match self.protocol_type {
-                                        ProtocolType::Via => "VIA",
-                                        ProtocolType::Vial => "VIAL",
-                                        ProtocolType::Zmk => "ZMK",
-                                    })
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(
-                                            &mut self.protocol_type,
-                                            ProtocolType::Vial,
-                                            "VIAL (auto-detect)",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.protocol_type,
-                                            ProtocolType::Via,
-                                            "VIA",
-                                        );
-                                        ui.selectable_value(
-                                            &mut self.protocol_type,
-                                            ProtocolType::Zmk,
-                                            "ZMK",
-                                        );
-                                    });
-                            });
-                            ui.end_row();
-
                             ui.label("Device");
                             ui.horizontal(|ui| {
                                 let combo_width = ui.available_width() - 80.0;
                                 let selected_text = self
                                     .selected_device_index
                                     .and_then(|i| self.available_devices.get(i))
-                                    .map(|d| d.display_name.clone())
+                                    .map(|d| d.display_name())
                                     .unwrap_or_else(|| "Select device...".to_string());
 
                                 egui::ComboBox::from_id_salt("device_combo")
@@ -477,7 +397,7 @@ impl OverlayApp {
                                             let device = &self.available_devices[idx];
                                             let selected = self.selected_device_index == Some(idx);
                                             if ui
-                                                .selectable_label(selected, &device.display_name)
+                                                .selectable_label(selected, device.display_name())
                                                 .clicked()
                                             {
                                                 self.select_device(idx);
@@ -497,10 +417,10 @@ impl OverlayApp {
                             });
                             ui.end_row();
 
-                            let config_label = match self.protocol_type {
-                                ProtocolType::Vial => "Device ID",
-                                ProtocolType::Via => "JSON Config",
-                                ProtocolType::Zmk => "Device ID",
+                            let config_label = if self.protocol_type == ProtocolType::Via {
+                                "JSON Config"
+                            } else {
+                                "Device ID"
                             };
                             ui.label(config_label);
                             ui.horizontal(|ui| {
@@ -513,9 +433,10 @@ impl OverlayApp {
                                 ui.add_sized(
                                     [input_width, 20.0],
                                     egui::TextEdit::singleline(&mut self.json_path)
-                                        .hint_text(match self.protocol_type {
-                                            ProtocolType::Via => "Path to keyboard info JSON",
-                                            _ => "Auto-filled from device",
+                                        .hint_text(if self.protocol_type == ProtocolType::Via {
+                                            "Path to keyboard info JSON"
+                                        } else {
+                                            "Auto-filled from device"
                                         })
                                         .interactive(input_interactive),
                                 );
