@@ -29,7 +29,13 @@ pub struct DiscoveredDevice {
 
 impl DiscoveredDevice {
     pub fn display_name(&self) -> String {
-        format!("{} ({})", self.base_name, self.kind.label())
+        format!(
+            "{} ({}, {:04X}:{:04X})",
+            self.base_name,
+            self.kind.label(),
+            self.vid,
+            self.pid
+        )
     }
 }
 
@@ -98,15 +104,12 @@ mod tests {
     fn display_name_uses_kind_label() {
         let board = DiscoveredDevice {
             base_name: "Board".to_string(),
-            vid: 0,
-            pid: 0,
+            vid: 0x1234,
+            pid: 0xABCD,
             serial_port: None,
             kind: DeviceKind::Studio,
         };
-        assert_eq!(
-            board.display_name(),
-            "Board (Studio)"
-        );
+        assert_eq!(board.display_name(), "Board (Studio, 1234:ABCD)");
     }
 
     #[test]
@@ -127,18 +130,12 @@ mod tests {
         };
         let qmk_board = DiscoveredDevice {
             base_name: "Board".to_string(),
-            vid: 0,
-            pid: 0,
+            vid: 0x0A0B,
+            pid: 0x0C0D,
             serial_port: None,
             kind: DeviceKind::Qmk,
         };
-        assert_eq!(
-            vial_board.display_name(),
-            "Board (Vial)"
-        );
-        assert_eq!(
-            qmk_board.display_name(),
-            "Board (QMK)"
-        );
+        assert_eq!(vial_board.display_name(), "Board (Vial, 0000:0000)");
+        assert_eq!(qmk_board.display_name(), "Board (QMK, 0A0B:0C0D)");
     }
 }

@@ -8,6 +8,7 @@ use crate::settings::{ProtocolType, Settings, WindowPosition};
 use crate::tray::TrayCommand;
 
 use eframe::egui::{self, Align2, Window};
+use egui_file_dialog::FileDialog;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 use tray_icon::TrayIcon;
@@ -37,6 +38,7 @@ pub struct OverlayApp {
     selected_device_index: Option<usize>,
     protocol_type: ProtocolType,
     json_path: String,
+    file_dialog: FileDialog,
     zmk_serial_port: Option<String>,
     _tray_icon: TrayIcon,
     tray_commands: Receiver<TrayCommand>,
@@ -49,6 +51,9 @@ impl OverlayApp {
         tray_commands: Receiver<TrayCommand>,
     ) -> Self {
         let base = initial_settings.clone().unwrap_or_default();
+        let should_auto_connect = initial_settings
+            .as_ref()
+            .is_some_and(|settings| settings.save_settings);
         let protocol_type = base.protocol_type;
         let json_path = match base.protocol_type {
             ProtocolType::Via => base.protocol_config.clone(),
@@ -70,7 +75,7 @@ impl OverlayApp {
 
         let mut app = Self {
             connection_state: AppConnectionState::Disconnected,
-            settings_visible: initial_settings.is_none(),
+            settings_visible: !should_auto_connect,
             settings_error: None,
             settings_warning: None,
             ever_connected: false,
@@ -81,14 +86,16 @@ impl OverlayApp {
             selected_device_index: None,
             protocol_type,
             json_path,
+            file_dialog: FileDialog::new(),
             zmk_serial_port,
             _tray_icon: tray_icon,
             tray_commands,
         };
 
-        app.refresh_devices();
+        app.available_devices = discover_devices();
 
-        if let Some(saved) = initial_settings {
+        if should_auto_connect {
+            let saved = initial_settings.expect("auto-connect requires saved settings");
             if let Err(e) = app.connect_with_settings(saved, false) {
                 app.settings_visible = true;
                 app.settings_error = Some(format!("Failed to connect using saved settings: {e}"));
@@ -96,11 +103,6 @@ impl OverlayApp {
         }
 
         app
-    }
-
-    fn refresh_devices(&mut self) {
-        self.available_devices = discover_devices();
-        self.selected_device_index = None;
     }
 
     fn select_device(&mut self, index: usize) {
@@ -148,30 +150,6 @@ impl OverlayApp {
                     .ok_or_else(|| "No serial port detected for this ZMK device".to_string())?;
                 Ok(format!("{}|{}", self.json_path.trim(), serial_port))
             }
-        }
-    }
-
-    fn active_connection_signature(&self) -> (ProtocolType, String, String) {
-        (
-            self.active_settings.protocol_type,
-            self.active_settings.protocol_config.clone(),
-            self.active_settings.layout_name.clone(),
-        )
-    }
-
-    fn draft_connection_signature(&self) -> Option<(ProtocolType, String, String)> {
-        let config = self.build_protocol_config().ok()?;
-        Some((
-            self.protocol_type,
-            config,
-            self.draft_settings.layout_name.clone(),
-        ))
-    }
-
-    fn connection_change_requested(&self) -> bool {
-        match self.draft_connection_signature() {
-            Some(sig) => sig != self.active_connection_signature(),
-            None => false,
         }
     }
 
@@ -248,18 +226,17 @@ impl OverlayApp {
     }
 
     fn persist_settings(&self) {
-        if self.active_settings.save_settings {
-            if let Err(e) = self.active_settings.save_to_file(SETTINGS_FILE) {
-                eprintln!("Failed to save settings: {e}");
-            }
+        if let Err(e) = self.active_settings.save_to_file(SETTINGS_FILE) {
+            eprintln!("Failed to save settings: {e}");
         }
     }
 
     fn connect_from_ui(&mut self) {
         if matches!(self.connection_state, AppConnectionState::Connected { .. }) {
-            self.settings_warning =
-                Some("Switching device/protocol/layout requires app restart in this version."
-                    .to_string());
+            self.settings_warning = Some(
+                "Switching device/protocol/layout requires app restart in this version."
+                    .to_string(),
+            );
             return;
         }
 
@@ -268,6 +245,15 @@ impl OverlayApp {
             return;
         }
 
+        if self.protocol_type == ProtocolType::Via && self.json_path.trim().is_empty() {
+            self.file_dialog.pick_file();
+            return;
+        }
+
+        self.connect_with_current_draft();
+    }
+
+    fn connect_with_current_draft(&mut self) {
         let protocol_config = match self.build_protocol_config() {
             Ok(cfg) => cfg,
             Err(e) => {
@@ -286,28 +272,40 @@ impl OverlayApp {
     }
 
     fn apply_live_visual_settings(&mut self) {
+        let old_timeout = self.active_settings.timeout;
+        let changed = self.active_settings.size != self.draft_settings.size
+            || self.active_settings.margin != self.draft_settings.margin
+            || self.active_settings.position != self.draft_settings.position
+            || self.active_settings.timeout != self.draft_settings.timeout
+            || self.active_settings.save_settings != self.draft_settings.save_settings;
+
+        if !changed {
+            return;
+        }
+
+        self.active_settings.size = self.draft_settings.size;
+        self.active_settings.margin = self.draft_settings.margin;
+        self.active_settings.position = self.draft_settings.position;
+        self.active_settings.timeout = self.draft_settings.timeout;
+        self.active_settings.save_settings = self.draft_settings.save_settings;
+
         if let AppConnectionState::Connected { keyboard } = &self.connection_state {
-            let old_timeout = self.active_settings.timeout;
-
-            self.active_settings.size = self.draft_settings.size;
-            self.active_settings.margin = self.draft_settings.margin;
-            self.active_settings.position = self.draft_settings.position;
-            self.active_settings.timeout = self.draft_settings.timeout;
-            self.active_settings.save_settings = self.draft_settings.save_settings;
-
             if old_timeout != self.active_settings.timeout {
                 keyboard.set_timeout(self.active_settings.timeout);
             }
-
-            self.persist_settings();
         }
+
+        self.persist_settings();
     }
 
     fn get_anchor_params(&self) -> (Align2, egui::Vec2) {
         match self.active_settings.position {
             WindowPosition::TopLeft => (
                 Align2::LEFT_TOP,
-                egui::vec2(self.active_settings.margin as f32, self.active_settings.margin as f32),
+                egui::vec2(
+                    self.active_settings.margin as f32,
+                    self.active_settings.margin as f32,
+                ),
             ),
             WindowPosition::TopRight => (
                 Align2::RIGHT_TOP,
@@ -359,161 +357,162 @@ impl OverlayApp {
 
     fn draw_settings_window(&mut self, ctx: &egui::Context) {
         let mut open = self.settings_visible;
+        let connection_locked =
+            matches!(self.connection_state, AppConnectionState::Connected { .. });
+        let selected_device = self
+            .selected_device_index
+            .and_then(|i| self.available_devices.get(i))
+            .cloned();
+        let selected_device_text = selected_device
+            .as_ref()
+            .map(|d| d.display_name())
+            .unwrap_or_else(|| "Select device...".to_string());
+
+        let settings_window_size = egui::vec2(450.0, 460.0);
+        let settings_window_pos = ctx.viewport_rect().center() - settings_window_size * 0.5;
+
         Window::new("QMK Layout Helper Settings")
             .open(&mut open)
-            .anchor(Align2::CENTER_CENTER, egui::Vec2::ZERO)
-            .default_size([540.0, 460.0])
+            .default_size(settings_window_size)
+            .default_pos(settings_window_pos)
             .collapsible(false)
             .resizable(false)
             .show(ctx, |ui| {
-                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                    ui.heading("QMK Layout Helper");
-                    ui.hyperlink_to(
-                        format!("Version {}", env!("CARGO_PKG_VERSION")),
-                        "https://github.com/srwi/qmk-layout-helper",
-                    );
+                ui.group(|ui| {
+                    ui.heading("Connection");
+                    ui.add_space(8.0);
+                    let control_spacing = ui.spacing().item_spacing.x;
+                    const RIGHT_COLUMN_WIDTH: f32 = 100.0;
 
-                    ui.add_space(16.0);
-
-                    egui::Grid::new("settings_grid")
+                    egui::Grid::new("connection_grid")
                         .num_columns(2)
                         .striped(true)
-                        .spacing([25.0, 14.0])
+                        .spacing([20.0, 10.0])
                         .show(ui, |ui| {
                             ui.label("Device");
-                            ui.horizontal(|ui| {
-                                let combo_width = ui.available_width() - 80.0;
-                                let selected_text = self
-                                    .selected_device_index
-                                    .and_then(|i| self.available_devices.get(i))
-                                    .map(|d| d.display_name())
-                                    .unwrap_or_else(|| "Select device...".to_string());
-
-                                egui::ComboBox::from_id_salt("device_combo")
-                                    .width(combo_width)
-                                    .selected_text(selected_text)
-                                    .show_ui(ui, |ui| {
-                                        for idx in 0..self.available_devices.len() {
-                                            let device = &self.available_devices[idx];
-                                            let selected = self.selected_device_index == Some(idx);
-                                            if ui
-                                                .selectable_label(selected, device.display_name())
-                                                .clicked()
-                                            {
-                                                self.select_device(idx);
+                            ui.add_enabled_ui(!connection_locked, |ui| {
+                                ui.horizontal(|ui| {
+                                    let combo_width = (ui.available_width()
+                                        - RIGHT_COLUMN_WIDTH
+                                        - control_spacing)
+                                        .max(120.0);
+                                    egui::ComboBox::from_id_salt("device_combo")
+                                        .width(combo_width)
+                                        .selected_text(selected_device_text.clone())
+                                        .show_ui(ui, |ui| {
+                                            for idx in 0..self.available_devices.len() {
+                                                let device = &self.available_devices[idx];
+                                                let selected =
+                                                    self.selected_device_index == Some(idx);
+                                                if ui
+                                                    .selectable_label(
+                                                        selected,
+                                                        device.display_name(),
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    self.select_device(idx);
+                                                }
                                             }
-                                        }
-                                        if self.available_devices.is_empty() {
-                                            ui.weak("No devices found");
-                                        }
-                                    });
+                                            if self.available_devices.is_empty() {
+                                                ui.weak("No devices found");
+                                            }
+                                        });
 
-                                if ui
-                                    .add_sized([70.0, 20.0], egui::Button::new("Refresh"))
-                                    .clicked()
-                                {
-                                    self.refresh_devices();
-                                }
-                            });
-                            ui.end_row();
-
-                            let config_label = if self.protocol_type == ProtocolType::Via {
-                                "JSON Config"
-                            } else {
-                                "Device ID"
-                            };
-                            ui.label(config_label);
-                            ui.horizontal(|ui| {
-                                let input_width = ui.available_width() - 110.0;
-                                let input_interactive = self.protocol_type == ProtocolType::Via
-                                    && !matches!(
-                                        self.connection_state,
-                                        AppConnectionState::Connected { .. }
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(RIGHT_COLUMN_WIDTH, 20.0),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            let can_connect = !connection_locked
+                                                && self.selected_device_index.is_some();
+                                            ui.add_enabled_ui(can_connect, |ui| {
+                                                if ui
+                                                    .add_sized(
+                                                        [RIGHT_COLUMN_WIDTH, 20.0],
+                                                        egui::Button::new("Connect"),
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    self.connect_from_ui();
+                                                }
+                                            });
+                                        },
                                     );
-                                ui.add_sized(
-                                    [input_width, 20.0],
-                                    egui::TextEdit::singleline(&mut self.json_path)
-                                        .hint_text(if self.protocol_type == ProtocolType::Via {
-                                            "Path to keyboard info JSON"
-                                        } else {
-                                            "Auto-filled from device"
-                                        })
-                                        .interactive(input_interactive),
-                                );
-
-                                let connected =
-                                    matches!(self.connection_state, AppConnectionState::Connected { .. });
-                                let can_connect = if connected {
-                                    self.connection_change_requested()
-                                } else {
-                                    self.selected_device_index.is_some()
-                                };
-                                let button_text = if connected {
-                                    if self.connection_change_requested() {
-                                        "Apply"
-                                    } else {
-                                        "Connected"
-                                    }
-                                } else {
-                                    "Connect"
-                                };
-
-                                ui.add_enabled_ui(can_connect, |ui| {
-                                    if ui
-                                        .add_sized([100.0, 20.0], egui::Button::new(button_text))
-                                        .clicked()
-                                    {
-                                        self.connect_from_ui();
-                                    }
                                 });
                             });
                             ui.end_row();
 
                             ui.label("Layout");
-                            let layout_enabled = !self.layout_names.is_empty();
-                            ui.add_enabled_ui(layout_enabled, |ui| {
-                                let selected_text = if self.layout_names.is_empty() {
-                                    "Connect to device first".to_string()
-                                } else {
-                                    self.draft_settings.layout_name.clone()
-                                };
-                                egui::ComboBox::from_id_salt("layout_combo")
-                                    .width(ui.available_width())
-                                    .selected_text(selected_text)
-                                    .show_ui(ui, |ui| {
-                                        for name in &self.layout_names {
-                                            ui.selectable_value(
-                                                &mut self.draft_settings.layout_name,
-                                                name.clone(),
-                                                name,
-                                            );
-                                        }
-                                    });
+                            ui.horizontal(|ui| {
+                                let layout_enabled = !self.layout_names.is_empty();
+                                let layout_width =
+                                    (ui.available_width() - RIGHT_COLUMN_WIDTH - control_spacing)
+                                        .max(120.0);
+                                ui.add_enabled_ui(layout_enabled, |ui| {
+                                    let selected_text = if self.layout_names.is_empty() {
+                                        "Connect to device first".to_string()
+                                    } else {
+                                        self.draft_settings.layout_name.clone()
+                                    };
+                                    egui::ComboBox::from_id_salt("layout_combo")
+                                        .width(layout_width)
+                                        .selected_text(selected_text)
+                                        .show_ui(ui, |ui| {
+                                            for name in &self.layout_names {
+                                                ui.selectable_value(
+                                                    &mut self.draft_settings.layout_name,
+                                                    name.clone(),
+                                                    name,
+                                                );
+                                            }
+                                        });
+                                });
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(RIGHT_COLUMN_WIDTH, 20.0),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                        ui.add(egui::Checkbox::new(
+                                            &mut self.draft_settings.save_settings,
+                                            "Auto-connect",
+                                        ));
+                                    },
+                                );
                             });
                             ui.end_row();
+                        });
+                });
 
+                ui.add_space(10.0);
+
+                ui.group(|ui| {
+                    ui.heading("Overlay Appearance");
+                    ui.add_space(8.0);
+
+                    egui::Grid::new("appearance_grid")
+                        .num_columns(2)
+                        .striped(true)
+                        .spacing([20.0, 10.0])
+                        .show(ui, |ui| {
                             ui.label("Alignment");
-                            ui.horizontal(|ui| {
-                                egui::ComboBox::from_id_salt("position_combo")
-                                    .width(ui.available_width())
-                                    .selected_text(self.draft_settings.position.to_string())
-                                    .show_ui(ui, |ui| {
-                                        for pos in [
-                                            WindowPosition::TopLeft,
-                                            WindowPosition::TopRight,
-                                            WindowPosition::BottomLeft,
-                                            WindowPosition::BottomRight,
-                                            WindowPosition::Top,
-                                            WindowPosition::Bottom,
-                                        ] {
-                                            ui.selectable_value(
-                                                &mut self.draft_settings.position,
-                                                pos,
-                                                pos.to_string(),
-                                            );
-                                        }
-                                    });
-                            });
+                            egui::ComboBox::from_id_salt("position_combo")
+                                .width(ui.available_width())
+                                .selected_text(self.draft_settings.position.to_string())
+                                .show_ui(ui, |ui| {
+                                    for pos in [
+                                        WindowPosition::TopLeft,
+                                        WindowPosition::TopRight,
+                                        WindowPosition::BottomLeft,
+                                        WindowPosition::BottomRight,
+                                        WindowPosition::Top,
+                                        WindowPosition::Bottom,
+                                    ] {
+                                        ui.selectable_value(
+                                            &mut self.draft_settings.position,
+                                            pos,
+                                            pos.to_string(),
+                                        );
+                                    }
+                                });
                             ui.end_row();
 
                             ui.label("Distance from screen edge");
@@ -545,9 +544,21 @@ impl OverlayApp {
                             );
                             ui.end_row();
                         });
+                });
 
-                    ui.add_space(18.0);
-                    ui.checkbox(&mut self.draft_settings.save_settings, "Remember settings");
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.add(egui::Hyperlink::from_label_and_url(
+                        egui::RichText::new("github.com/srwi/qmk-layout-helper").weak(),
+                        "https://github.com/srwi/qmk-layout-helper",
+                    ));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add(egui::Hyperlink::from_label_and_url(
+                            egui::RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION")))
+                                .weak(),
+                            "https://github.com/srwi/qmk-layout-helper/releases",
+                        ));
+                    });
                 });
             });
 
@@ -737,8 +748,8 @@ impl OverlayApp {
                         .map(|k| k.kind)
                         .unwrap_or(KeycodeKind::Basic);
 
-                    let (fill_color, stroke_color, border_thickness, font_color) =
-                        self.get_keycode_color(
+                    let (fill_color, stroke_color, border_thickness, font_color) = self
+                        .get_keycode_color(
                             layout_key.layer_ref.unwrap_or(effective_layer),
                             first_layer_key_kind,
                             is_background_key,
@@ -819,7 +830,7 @@ impl OverlayApp {
 impl eframe::App for OverlayApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         if self.settings_visible {
-            egui::Rgba::from_black_alpha(0.35).to_array()
+            egui::Rgba::from_black_alpha(0.65).to_array()
         } else {
             egui::Rgba::TRANSPARENT.to_array()
         }
@@ -828,6 +839,12 @@ impl eframe::App for OverlayApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain_tray_commands(ctx);
         self.apply_live_visual_settings();
+        self.file_dialog.update(ctx);
+
+        if let Some(path) = self.file_dialog.take_picked() {
+            self.json_path = path.to_string_lossy().to_string();
+            self.connect_from_ui();
+        }
 
         ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(
             !self.settings_visible,

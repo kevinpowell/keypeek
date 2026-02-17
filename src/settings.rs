@@ -123,6 +123,7 @@ impl Settings {
         section.set("position", self.position.to_string());
         section.set("timeout", self.timeout.to_string());
         section.set("margin", self.margin.to_string());
+        section.set("save_settings", self.save_settings.to_string());
         conf.write_to_file(path)
     }
 
@@ -154,6 +155,9 @@ impl Settings {
         }
         if let Some(val) = section.get("margin") {
             s.margin = val.parse().unwrap_or(s.margin);
+        }
+        if let Some(val) = section.get("save_settings") {
+            s.save_settings = val.parse().unwrap_or(s.save_settings);
         }
         s.confirmed = true;
         Some(s)
