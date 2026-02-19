@@ -83,6 +83,84 @@ impl FromStr for WindowPosition {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct ThemeColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl ThemeColor {
+    pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+}
+
+impl fmt::Display for ThemeColor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{},{},{},{}", self.r, self.g, self.b, self.a)
+    }
+}
+
+impl FromStr for ThemeColor {
+    type Err = ParseSettingsError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let mut parts = value.split(',').map(str::trim);
+        let (Some(r), Some(g), Some(b), Some(a)) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            return Err(ParseSettingsError);
+        };
+
+        if parts.next().is_some() {
+            return Err(ParseSettingsError);
+        }
+
+        Ok(Self {
+            r: r.parse().map_err(|_| ParseSettingsError)?,
+            g: g.parse().map_err(|_| ParseSettingsError)?,
+            b: b.parse().map_err(|_| ParseSettingsError)?,
+            a: a.parse().map_err(|_| ParseSettingsError)?,
+        })
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ThemeSettings {
+    pub layer_colors: [ThemeColor; 7],
+    pub font_color: ThemeColor,
+}
+
+impl ThemeSettings {
+    pub fn layer_color(&self, layer: u8) -> ThemeColor {
+        if let Some(color) = self.layer_colors.get(layer as usize) {
+            *color
+        } else {
+            self.layer_colors[6]
+        }
+    }
+}
+
+impl Default for ThemeSettings {
+    fn default() -> Self {
+        const ALPHA: u8 = 239;
+        Self {
+            layer_colors: [
+                ThemeColor::new(83, 83, 83, ALPHA),
+                ThemeColor::new(80, 140, 115, ALPHA),
+                ThemeColor::new(100, 115, 150, ALPHA),
+                ThemeColor::new(140, 110, 150, ALPHA),
+                ThemeColor::new(95, 121, 127, ALPHA),
+                ThemeColor::new(147, 137, 110, ALPHA),
+                ThemeColor::new(127, 127, 127, ALPHA),
+            ],
+            font_color: ThemeColor::new(255, 255, 255, 255),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Settings {
     pub protocol_type: ProtocolType,
@@ -92,6 +170,7 @@ pub struct Settings {
     pub position: WindowPosition,
     pub timeout: u64,
     pub margin: u32,
+    pub theme: ThemeSettings,
     pub confirmed: bool,
     pub save_settings: bool,
 }
@@ -106,6 +185,7 @@ impl Default for Settings {
             position: WindowPosition::BottomRight,
             timeout: 2000,
             margin: 10,
+            theme: ThemeSettings::default(),
             confirmed: false,
             save_settings: false,
         }
@@ -123,6 +203,10 @@ impl Settings {
         section.set("position", self.position.to_string());
         section.set("timeout", self.timeout.to_string());
         section.set("margin", self.margin.to_string());
+        for (index, color) in self.theme.layer_colors.iter().enumerate() {
+            section.set(format!("layer_color_{index}"), color.to_string());
+        }
+        section.set("font_color", self.theme.font_color.to_string());
         section.set("save_settings", self.save_settings.to_string());
         conf.write_to_file(path)
     }
@@ -155,6 +239,18 @@ impl Settings {
         }
         if let Some(val) = section.get("margin") {
             s.margin = val.parse().unwrap_or(s.margin);
+        }
+        for index in 0..s.theme.layer_colors.len() {
+            if let Some(val) = section.get(&format!("layer_color_{index}")) {
+                if let Ok(parsed) = val.parse() {
+                    s.theme.layer_colors[index] = parsed;
+                }
+            }
+        }
+        if let Some(val) = section.get("font_color") {
+            if let Ok(parsed) = val.parse() {
+                s.theme.font_color = parsed;
+            }
         }
         if let Some(val) = section.get("save_settings") {
             s.save_settings = val.parse().unwrap_or(s.save_settings);

@@ -4,7 +4,7 @@ use crate::layout_key::{KeycodeKind, LayoutKey};
 use crate::protocols::zmk;
 use crate::protocols::zmk_studio;
 use crate::protocols::{connect_protocol, format_vid_pid, parse_vid_pid, KeyboardDefinition};
-use crate::settings::{ProtocolType, Settings, WindowPosition};
+use crate::settings::{ProtocolType, Settings, ThemeColor, WindowPosition};
 
 use eframe::egui::{self, Align2, Window};
 use egui_file_dialog::FileDialog;
@@ -263,6 +263,7 @@ impl OverlayApp {
             || self.active_settings.margin != self.draft_settings.margin
             || self.active_settings.position != self.draft_settings.position
             || self.active_settings.timeout != self.draft_settings.timeout
+            || self.active_settings.theme != self.draft_settings.theme
             || self.active_settings.save_settings != self.draft_settings.save_settings;
 
         if !changed {
@@ -273,6 +274,7 @@ impl OverlayApp {
         self.active_settings.margin = self.draft_settings.margin;
         self.active_settings.position = self.draft_settings.position;
         self.active_settings.timeout = self.draft_settings.timeout;
+        self.active_settings.theme = self.draft_settings.theme.clone();
         self.active_settings.save_settings = self.draft_settings.save_settings;
 
         if let AppConnectionState::Connected { keyboard } = &self.connection_state {
@@ -390,7 +392,7 @@ impl OverlayApp {
             .map(|d| d.display_name())
             .unwrap_or_else(|| "Select device...".to_string());
 
-        let settings_window_size = egui::vec2(450.0, 460.0);
+        let settings_window_size = egui::vec2(450.0, 700.0);
         let settings_window_pos = ctx.viewport_rect().center() - settings_window_size * 0.5;
 
         Window::new("QMK Layout Helper Settings")
@@ -568,6 +570,61 @@ impl OverlayApp {
                         });
                 });
 
+                ui.add_space(10.0);
+
+                ui.group(|ui| {
+                    ui.heading("Theme");
+                    ui.add_space(8.0);
+
+                    ui.columns(2, |columns| {
+                        columns[0].vertical(|ui| {
+                            Self::theme_color_entry(
+                                ui,
+                                "Font color",
+                                &mut self.draft_settings.theme.font_color,
+                            );
+                            Self::theme_color_entry(
+                                ui,
+                                "Layer 0 color",
+                                &mut self.draft_settings.theme.layer_colors[0],
+                            );
+                            Self::theme_color_entry(
+                                ui,
+                                "Layer 1 color",
+                                &mut self.draft_settings.theme.layer_colors[1],
+                            );
+                            Self::theme_color_entry(
+                                ui,
+                                "Layer 2 color",
+                                &mut self.draft_settings.theme.layer_colors[2],
+                            );
+                        });
+
+                        columns[1].vertical(|ui| {
+                            Self::theme_color_entry(
+                                ui,
+                                "Layer 3 color",
+                                &mut self.draft_settings.theme.layer_colors[3],
+                            );
+                            Self::theme_color_entry(
+                                ui,
+                                "Layer 4 color",
+                                &mut self.draft_settings.theme.layer_colors[4],
+                            );
+                            Self::theme_color_entry(
+                                ui,
+                                "Layer 5 color",
+                                &mut self.draft_settings.theme.layer_colors[5],
+                            );
+                            Self::theme_color_entry(
+                                ui,
+                                "Other layers color",
+                                &mut self.draft_settings.theme.layer_colors[6],
+                            );
+                        });
+                    });
+                });
+
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.add(egui::Hyperlink::from_label_and_url(
@@ -687,35 +744,21 @@ impl OverlayApp {
         desaturate: bool,
         pressed: bool,
     ) -> (egui::Color32, egui::Color32, f32, egui::Color32) {
-        const ALPHA: u8 = 239;
         const DESATURATE_FACTOR: f32 = 0.7;
 
-        const BLACK: egui::Color32 = egui::Color32::from_rgba_premultiplied(0, 0, 0, ALPHA);
-        const LAYER_0: egui::Color32 = egui::Color32::from_rgba_premultiplied(83, 83, 83, ALPHA);
-        const LAYER_1: egui::Color32 = egui::Color32::from_rgba_premultiplied(80, 140, 115, ALPHA);
-        const LAYER_2: egui::Color32 = egui::Color32::from_rgba_premultiplied(100, 115, 150, ALPHA);
-        const LAYER_3: egui::Color32 = egui::Color32::from_rgba_premultiplied(140, 110, 150, ALPHA);
-        const LAYER_4: egui::Color32 = egui::Color32::from_rgba_premultiplied(95, 121, 127, ALPHA);
-        const LAYER_5: egui::Color32 = egui::Color32::from_rgba_premultiplied(147, 137, 110, ALPHA);
-        const LAYER_N: egui::Color32 = egui::Color32::from_rgba_premultiplied(127, 127, 127, ALPHA);
+        const BLACK: egui::Color32 = egui::Color32::BLACK;
 
         let size = self.active_settings.size as f32;
-        let mut background_color = match layer {
-            0 => LAYER_0,
-            1 => LAYER_1,
-            2 => LAYER_2,
-            3 => LAYER_3,
-            4 => LAYER_4,
-            5 => LAYER_5,
-            _ => LAYER_N,
-        };
+        let layer_theme_color = self.active_settings.theme.layer_color(layer);
+        let mut background_color = Self::to_egui_color(layer_theme_color);
+        let mut font_color = Self::to_egui_color(self.active_settings.theme.font_color);
 
         if pressed {
             return (
                 background_color.lerp_to_gamma(egui::Color32::WHITE, 0.2),
                 background_color.lerp_to_gamma(egui::Color32::WHITE, 0.7),
                 0.03 * size,
-                egui::Color32::WHITE,
+                font_color.lerp_to_gamma(egui::Color32::WHITE, 0.4),
             );
         }
 
@@ -727,17 +770,34 @@ impl OverlayApp {
 
         let mut border_color = background_color.lerp_to_gamma(BLACK, 0.2);
         if desaturate && layer != 0 {
-            background_color = background_color.lerp_to_gamma(LAYER_0, DESATURATE_FACTOR);
-            border_color = border_color.lerp_to_gamma(LAYER_0, DESATURATE_FACTOR);
+            let layer0_color = Self::to_egui_color(self.active_settings.theme.layer_colors[0]);
+            background_color = background_color.lerp_to_gamma(layer0_color, DESATURATE_FACTOR);
+            border_color = border_color.lerp_to_gamma(layer0_color, DESATURATE_FACTOR);
+            font_color = font_color.gamma_multiply(1.0 - DESATURATE_FACTOR);
         }
 
-        let font_color = if desaturate {
-            egui::Color32::WHITE.gamma_multiply(1.0 - DESATURATE_FACTOR)
-        } else {
-            egui::Color32::WHITE
-        };
-
         (background_color, border_color, 1.0, font_color)
+    }
+
+    fn to_egui_color(color: ThemeColor) -> egui::Color32 {
+        egui::Color32::from_rgba_premultiplied(color.r, color.g, color.b, color.a)
+    }
+
+    fn from_egui_color(color: egui::Color32) -> ThemeColor {
+        ThemeColor::new(color.r(), color.g(), color.b(), color.a())
+    }
+
+    fn theme_color_entry(ui: &mut egui::Ui, label: &str, color: &mut ThemeColor) {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let mut display_color = Self::to_egui_color(*color);
+                if ui.color_edit_button_srgba(&mut display_color).changed() {
+                    *color = Self::from_egui_color(display_color);
+                }
+            });
+        });
+        ui.add_space(4.0);
     }
 
     fn draw_overlay_window(&self, ctx: &egui::Context, keyboard: &Keyboard) {
