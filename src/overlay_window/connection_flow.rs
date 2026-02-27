@@ -1,9 +1,9 @@
 use super::state::{AppConnectionState, ZmkTransportDraft};
 use super::{OverlayApp, SETTINGS_FILE};
-use crate::connection::{build_connected_state, ConnectedState, ConnectionTask};
+use crate::connection::{ConnectedState, ConnectionTask};
 use crate::device_discovery::DeviceKind;
 use crate::protocols::{format_vid_pid, format_zmk_config, ZmkTransportConfig};
-use crate::settings::{ProtocolType, Settings};
+use crate::settings::ProtocolType;
 
 impl OverlayApp {
     pub(super) fn select_device(&mut self, index: usize) {
@@ -76,7 +76,7 @@ impl OverlayApp {
         }
     }
 
-    fn apply_connected_state(&mut self, connected: ConnectedState, opened_from_ui: bool) {
+    pub(super) fn apply_connected_state(&mut self, connected: ConnectedState, opened_from_ui: bool) {
         self.session.layout_names = connected.layout_names;
         self.settings.active = connected.settings.clone();
         self.settings.draft = connected.settings;
@@ -94,16 +94,6 @@ impl OverlayApp {
         }
 
         self.persist_settings();
-    }
-
-    pub(super) fn connect_with_settings(
-        &mut self,
-        settings: Settings,
-        opened_from_ui: bool,
-    ) -> Result<(), String> {
-        let connected = build_connected_state(settings)?;
-        self.apply_connected_state(connected, opened_from_ui);
-        Ok(())
     }
 
     pub(super) fn persist_settings(&self) {

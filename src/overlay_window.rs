@@ -1,3 +1,4 @@
+use crate::connection::ConnectedState;
 use crate::device_discovery::DiscoveredDevice;
 use crate::settings::{ProtocolType, Settings};
 
@@ -23,29 +24,24 @@ pub struct OverlayApp {
 
 impl OverlayApp {
     pub fn new(
-        initial_settings: Option<Settings>,
+        base_settings: Settings,
         available_devices: Vec<DiscoveredDevice>,
+        initial_connected: Option<ConnectedState>,
+        initial_error: Option<String>,
+        settings_visible: bool,
     ) -> Self {
-        let base = initial_settings.clone().unwrap_or_default();
-        let should_auto_connect = initial_settings
-            .as_ref()
-            .is_some_and(|settings| settings.save_settings);
-        let protocol_type = ProtocolType::default();
-        let json_path = String::new();
-        let zmk_transport = ZmkTransportDraft::Serial { port_name: None };
-
         let mut app = Self {
             ui: UiState {
-                settings_visible: !should_auto_connect,
-                settings_error: None,
+                settings_visible,
+                settings_error: initial_error,
                 settings_warning: None,
                 #[cfg(target_os = "macos")]
                 macos_maximized: false,
                 file_dialog: egui_file_dialog::FileDialog::new(),
             },
             settings: SettingsState {
-                active: base.clone(),
-                draft: base,
+                active: base_settings.clone(),
+                draft: base_settings,
             },
             session: SessionState {
                 connection: AppConnectionState::Disconnected,
@@ -56,20 +52,15 @@ impl OverlayApp {
             connect: ConnectDraftState {
                 available_devices,
                 selected_device_index: None,
-                protocol_type,
-                json_path,
-                zmk_transport,
+                protocol_type: ProtocolType::default(),
+                json_path: String::new(),
+                zmk_transport: ZmkTransportDraft::Serial { port_name: None },
                 pending_connect: None,
             },
         };
 
-        if should_auto_connect {
-            let saved = initial_settings.expect("auto-connect requires saved settings");
-            if let Err(e) = app.connect_with_settings(saved, false) {
-                app.ui.settings_visible = true;
-                app.ui.settings_error =
-                    Some(format!("Failed to connect using saved settings: {e}"));
-            }
+        if let Some(connected) = initial_connected {
+            app.apply_connected_state(connected, false);
         }
 
         app

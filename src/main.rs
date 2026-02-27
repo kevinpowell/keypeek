@@ -11,6 +11,7 @@ mod settings;
 mod tray;
 mod zmk_keycode_labels;
 
+use connection::build_connected_state;
 use device_discovery::discover_devices;
 use eframe::egui::{self, IconData};
 use overlay_window::OverlayApp;
@@ -18,10 +19,55 @@ use settings::Settings;
 
 const SETTINGS_FILE: &str = "settings.ini";
 
+fn bootstrap_startup(
+    initial_settings: Option<Settings>,
+) -> (
+    Settings,
+    Vec<device_discovery::DiscoveredDevice>,
+    Option<connection::ConnectedState>,
+    Option<String>,
+    bool,
+) {
+    let mut base_settings = initial_settings.clone().unwrap_or_default();
+    let mut available_devices = Vec::new();
+    let mut initial_connected = None;
+    let mut initial_error = None;
+    let mut settings_visible = true;
+
+    if let Some(saved) = initial_settings.filter(|settings| settings.save_settings) {
+        match build_connected_state(saved) {
+            Ok(connected) => {
+                base_settings = connected.settings.clone();
+                initial_connected = Some(connected);
+                settings_visible = false;
+                return (
+                    base_settings,
+                    available_devices,
+                    initial_connected,
+                    initial_error,
+                    settings_visible,
+                );
+            }
+            Err(e) => {
+                initial_error = Some(format!("Failed to connect using saved settings: {e}"));
+            }
+        }
+    }
+
+    available_devices = discover_devices();
+    (
+        base_settings,
+        available_devices,
+        initial_connected,
+        initial_error,
+        settings_visible,
+    )
+}
+
 fn run_overlay_app(initial_settings: Option<Settings>) -> Result<(), eframe::Error> {
     let _tray_icon = tray::create_tray_icon();
-
-    let available_devices = discover_devices();
+    let (base_settings, available_devices, initial_connected, initial_error, settings_visible) =
+        bootstrap_startup(initial_settings);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -51,8 +97,11 @@ fn run_overlay_app(initial_settings: Option<Settings>) -> Result<(), eframe::Err
             cc.egui_ctx.set_fonts(fonts);
 
             Ok(Box::new(OverlayApp::new(
-                initial_settings,
+                base_settings,
                 available_devices,
+                initial_connected,
+                initial_error,
+                settings_visible,
             )))
         }),
     )
