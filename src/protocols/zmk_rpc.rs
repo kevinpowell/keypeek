@@ -3,8 +3,8 @@ use crate::zmk_keycode_labels::behavior_to_layout_key;
 use std::error::Error;
 use std::io::{Read, Write};
 use std::time::Duration;
-use zmk_studio_api::transport::{BleDiscoveryMode, PlatformBleTransport};
 use zmk_studio_api::proto::zmk::{core, keymap};
+use zmk_studio_api::transport::{BleDiscoveryMode, PlatformBleTransport};
 use zmk_studio_api::{Behavior, StudioClient};
 
 pub struct ZmkSerialDevice {
@@ -49,9 +49,8 @@ pub fn scan_serial_ports() -> Vec<ZmkSerialDevice> {
 }
 
 pub fn scan_ble_devices() -> Result<Vec<ZmkBleDevice>, Box<dyn Error>> {
-    let devices = StudioClient::<PlatformBleTransport>::list_ble_devices_with_mode(
-        BleDiscoveryMode::Any,
-    )?;
+    let devices =
+        StudioClient::<PlatformBleTransport>::list_ble_devices_with_mode(BleDiscoveryMode::Any)?;
     Ok(devices
         .into_iter()
         .map(|device| {

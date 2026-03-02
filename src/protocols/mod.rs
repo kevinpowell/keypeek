@@ -85,8 +85,13 @@ pub enum ZmkTransportConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConnectionSpec {
-    Via { json_path: String },
-    Vial { vid: u16, pid: u16 },
+    Via {
+        json_path: String,
+    },
+    Vial {
+        vid: u16,
+        pid: u16,
+    },
     Zmk {
         vid: u16,
         pid: u16,
@@ -119,10 +124,8 @@ pub fn connect_protocol(
                     zmk_rpc::ZmkTransport::BleDevice(device_id.clone())
                 }
             };
-            let zmk_data = zmk_rpc::fetch_zmk_data(&zmk_transport)?;
-            let protocol = ZmkProtocol::connect_live(*vid, *pid, &zmk_data)?;
+            let protocol = ZmkProtocol::connect_live(*vid, *pid, &zmk_transport)?;
             Ok(Box::new(protocol))
         }
     }
 }
-

@@ -129,11 +129,9 @@ pub fn discover_devices() -> Vec<DiscoveredDevice> {
             if let Some(hid) = all_hid.iter().find(|d| {
                 d.usage_page != VIA_USAGE_PAGE && is_possible_ble_match(d, &ble.display_name)
             }) {
-                // On Windows, BLE Studio connections for a board that is also USB-attached
-                // are unreliable; prefer showing only the serial transport in that case.
-                if cfg!(target_os = "windows")
-                    && zmk_vid_pid.contains(&(hid.vendor_id, hid.product_id))
-                {
+                // If a serial transport exists for the same board, prefer serial and hide BLE.
+                // This avoids platform-specific BLE RPC instability when USB and BLE are both active.
+                if zmk_vid_pid.contains(&(hid.vendor_id, hid.product_id)) {
                     continue;
                 }
 

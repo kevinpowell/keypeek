@@ -1,10 +1,13 @@
-use super::zmk_rpc::ZmkData;
+use super::zmk_rpc::{self, ZmkData, ZmkTransport};
 use super::{Key, KeyboardDefinition, KeyboardLayout, KeyboardProtocol};
 use crate::layout_key::LayoutKey;
+use hidapi::HidApi;
 use qmk_via_api::api::KeyboardApi;
 use std::error::Error;
+use std::time::{Duration, Instant};
 
 type LayerKeys3d = Vec<Vec<Vec<Option<LayoutKey>>>>;
+const VIA_USAGE_PAGE: u16 = 0xff60;
 
 pub struct ZmkProtocol {
     api: KeyboardApi,
@@ -14,13 +17,20 @@ pub struct ZmkProtocol {
 }
 
 impl ZmkProtocol {
-    pub fn connect_live(vid: u16, pid: u16, zmk_data: &ZmkData) -> Result<Self, Box<dyn Error>> {
-        let (definition, layout_keys, layer_count) = build_from_zmk_data(vid, pid, zmk_data)?;
-        let api = KeyboardApi::new(vid, pid, 0xff60).map_err(|e| {
+    pub fn connect_live(
+        vid: u16,
+        pid: u16,
+        transport: &ZmkTransport,
+    ) -> Result<Self, Box<dyn Error>> {
+        let zmk_data = zmk_rpc::fetch_zmk_data(transport)?;
+        wait_for_hid_reappearance(vid, pid, VIA_USAGE_PAGE, Duration::from_secs(8))
+            .map_err(std::io::Error::other)?;
+        let api = open_keyboard_api(vid, pid).map_err(|e| {
             std::io::Error::other(format!(
-                "Failed to connect HID ({vid:04x}:{pid:04x}): {e}"
+                "Failed to connect HID ({vid:04x}:{pid:04x}) after reappearance: {e}"
             ))
         })?;
+        let (definition, layout_keys, layer_count) = build_from_zmk_data(vid, pid, zmk_data)?;
 
         Ok(Self {
             api,
@@ -29,6 +39,39 @@ impl ZmkProtocol {
             layer_count,
         })
     }
+}
+
+fn open_keyboard_api(vid: u16, pid: u16) -> Result<KeyboardApi, String> {
+    KeyboardApi::new(vid, pid, VIA_USAGE_PAGE).map_err(|e| e.to_string())
+}
+
+fn wait_for_hid_reappearance(
+    vid: u16,
+    pid: u16,
+    usage_page: u16,
+    timeout: Duration,
+) -> Result<(), String> {
+    // On Linux BLE, the HID node can temporarily disappear while HoG/GATT activity settles; wait
+    // for the matching HID interface to reappear before reconnecting via hidapi.
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        let api = HidApi::new().map_err(|e| format!("hidapi init failed: {e}"))?;
+        let present = api
+            .device_list()
+            .any(|d| d.vendor_id() == vid && d.product_id() == pid && d.usage_page() == usage_page);
+        if present {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
+
+    Err(format!(
+        "HID interface did not reappear in {} ms for {:04x}:{:04x} usage 0x{:04x}",
+        timeout.as_millis(),
+        vid,
+        pid,
+        usage_page
+    ))
 }
 
 impl KeyboardProtocol for ZmkProtocol {
@@ -54,7 +97,7 @@ impl KeyboardProtocol for ZmkProtocol {
 fn build_from_zmk_data(
     vid: u16,
     pid: u16,
-    data: &ZmkData,
+    data: ZmkData,
 ) -> Result<(KeyboardDefinition, LayerKeys3d, usize), Box<dyn Error>> {
     const ACTIVE_LAYOUT_NAME: &str = "active physical layout";
 
