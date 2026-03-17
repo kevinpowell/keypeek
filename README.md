@@ -48,31 +48,54 @@ The module adds that event stream over the device connection, so the overlay sta
    qmk info -kb <your_keyboard> -m -f json > keyboard_info.json
    ```
    
-   This step is only required for QMK keyboards, because VIA does not provide physical layout data directly over the connection. Vial keyboards do not require this step, as the layout data is transmitted when connecting the keyboard to KeyPeek.
+   This last step is only required for QMK keyboards, because VIA does not provide physical layout data directly over the connection. Vial keyboards do not require this step, as the layout data is transmitted when connecting the keyboard to KeyPeek.
 
 ### ZMK
 
 1. Add the KeyPeek module to your `zmk-config/config/west.yml`:
 
-   ```yaml
-   manifest:
-     remotes:
-       - name: zmkfirmware
-         url-base: https://github.com/zmkfirmware
-       - name: srwi
-         url-base: https://github.com/srwi
-     projects:
-       - name: zmk
-         remote: zmkfirmware
-         revision: main
-         import: app/west.yml
-       - name: zmk-keypeek-layer-notifier
-         remote: srwi
-         revision: main
-   ```
-2. Run `west update` in your `zmk-config` workspace to fetch the module.
-3. Enable ZMK Studio in `build.yaml` for the central (USB-connected) side by adding `snippet: studio-rpc-usb-uart` and `cmake-args: -DCONFIG_ZMK_STUDIO=y`, then build and flash.
-4. KeyPeek reads layout and keymap directly from the device for ZMK.
+  ```yaml
+  manifest:
+    remotes:
+      - name: zmkfirmware
+        url-base: https://github.com/zmkfirmware
+      - name: zzeneg # <-- required for Raw HID module
+        url-base: https://github.com/zzeneg
+      - name: srwi # <-- required for KeyPeek module
+        url-base: https://github.com/srwi
+    projects:
+      - name: zmk
+        remote: zmkfirmware
+        revision: main
+        import: app/west.yml
+      - name: zmk-raw-hid # <-- Raw HID module
+        remote: zzeneg
+        revision: main
+      - name: zmk-keypeek-layer-notifier # <-- KeyPeek module
+        remote: srwi
+        revision: main
+  ```
+
+2. Add the `raw_hid_adapter` as an additional shield to your build, e.g. in `build.yaml`:
+
+  ```yaml
+  include:
+    - board: nice_nano_v2
+      shield: iskra raw_hid_adapter # <-- required for Raw HID support
+      snippet: studio-rpc-usb-uart # <-- required for ZMK Studio support
+  ```
+
+3. Enable Raw HID and ZMK Studio support in your `.conf` file:
+
+  ```conf
+  CONFIG_RAW_HID=y
+  CONFIG_ZMK_STUDIO=y
+  ```
+
+KeyPeek will then read layout and keymap directly from the device for ZMK without requiring additional configuration.
+
+> [!NOTE]
+> If the keyboard has been paired via Bluetooth before enabling raw HID support, re-pairing may be necessary to allow the new communication channel.
 
 ## Usage
 
