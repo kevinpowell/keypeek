@@ -34,4 +34,5 @@ winit = "0.30.13"
 [package.metadata.bundle]
 name = "KeyPeek"
 identifier = "dev.srwi.keypeek"
+osx_info_plist_exts = ["resources/macos-info-plist-ext.xml"]
 
