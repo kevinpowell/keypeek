@@ -1,3 +1,4 @@
+use super::layout_geometry::flattened_top_left_after_center_rotation;
 use super::zmk_rpc::{self, ZmkData, ZmkTransport};
 use super::{Key, KeyboardDefinition, KeyboardLayout, KeyboardProtocol};
 use crate::layout_key::LayoutKey;
@@ -122,32 +123,12 @@ fn build_from_zmk_data(
             let x = k.x as f32 / 100.0;
             let y = k.y as f32 / 100.0;
 
-            // Keypeek draws axis-aligned keys only. We still apply the key rotation
-            // transform to the key center so rotated clusters keep the expected spacing.
+            // Keypeek does not support rotated keys, so we recalculate the position adjusted for rotation around the pivot point.
             let angle_deg = k.r as f32 / 100.0;
-            let (x, y) = if angle_deg.abs() > f32::EPSILON {
-                let pivot_x = if k.rx == 0 { k.x } else { k.rx } as f32 / 100.0;
-                let pivot_y = if k.ry == 0 { k.y } else { k.ry } as f32 / 100.0;
-
-                let center_x = x + (w * 0.5);
-                let center_y = y + (h * 0.5);
-
-                let local_center_x = center_x - pivot_x;
-                let local_center_y = center_y - pivot_y;
-
-                let angle = angle_deg.to_radians();
-                let cos_a = angle.cos();
-                let sin_a = angle.sin();
-
-                let rotated_center_x =
-                    (local_center_x * cos_a) - (local_center_y * sin_a) + pivot_x;
-                let rotated_center_y =
-                    (local_center_x * sin_a) + (local_center_y * cos_a) + pivot_y;
-
-                (rotated_center_x - (w * 0.5), rotated_center_y - (h * 0.5))
-            } else {
-                (x, y)
-            };
+            let pivot_x = if k.rx == 0 { k.x } else { k.rx } as f32 / 100.0;
+            let pivot_y = if k.ry == 0 { k.y } else { k.ry } as f32 / 100.0;
+            let (x, y) =
+                flattened_top_left_after_center_rotation(x, y, w, h, angle_deg, pivot_x, pivot_y);
 
             Key {
                 row: 0,

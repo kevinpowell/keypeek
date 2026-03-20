@@ -1,3 +1,4 @@
+use super::layout_geometry::flattened_top_left_after_center_rotation;
 use super::{Key, KeyboardDefinition, KeyboardLayout};
 use serde_json::Value;
 use std::error::Error;
@@ -67,7 +68,7 @@ fn parse_kle_keymap(keymap: &[Value]) -> Result<Vec<Key>, Box<dyn Error>> {
 
         for item in row_array {
             if let Some(obj) = item.as_object() {
-                // This is a key property object - modifies the next key
+                // This is a key property object which modifies the next key
 
                 // Handle rotation properties (these persist until changed)
                 // When rx or ry changes, reset the current position to the rotation origin
@@ -99,29 +100,18 @@ fn parse_kle_keymap(keymap: &[Value]) -> Result<Vec<Key>, Box<dyn Error>> {
             } else if let Some(label) = item.as_str() {
                 // This is a key with a label
                 if let Some((row, col)) = parse_matrix_label(label) {
-                    // Calculate the final position, applying rotation if needed
-                    let (final_x, final_y) = if rotation_angle != 0.0 {
-                        // Calculate the center of the key relative to rotation origin
-                        let center_x = current_x + current_w / 2.0;
-                        let center_y = current_y + current_h / 2.0;
-
-                        // Apply rotation transformation to the center point
-                        let angle_rad = rotation_angle.to_radians();
-                        let cos_a = angle_rad.cos();
-                        let sin_a = angle_rad.sin();
-
-                        // Rotate the center position
-                        let rotated_center_x = center_x * cos_a - center_y * sin_a;
-                        let rotated_center_y = center_x * sin_a + center_y * cos_a;
-
-                        // Convert back to top-left corner and add rotation origin
-                        (
-                            rotation_x + rotated_center_x - current_w / 2.0,
-                            rotation_y + rotated_center_y - current_h / 2.0,
-                        )
-                    } else {
-                        (current_x, current_y)
-                    };
+                    // Normalize KLE-relative coordinates to absolute space, then flatten rotation.
+                    let absolute_x = rotation_x + current_x;
+                    let absolute_y = rotation_y + current_y;
+                    let (final_x, final_y) = flattened_top_left_after_center_rotation(
+                        absolute_x,
+                        absolute_y,
+                        current_w,
+                        current_h,
+                        rotation_angle,
+                        rotation_x,
+                        rotation_y,
+                    );
 
                     keys.push(Key {
                         row,
@@ -140,8 +130,8 @@ fn parse_kle_keymap(keymap: &[Value]) -> Result<Vec<Key>, Box<dyn Error>> {
             }
         }
 
-        // Only increment y for non-rotated keys
-        // For rotated keys, y is relative to rotation origin
+        // Only increment y for non-rotated keys.
+        // For rotated keys, y is relative to rotation origin.
         if rotation_angle == 0.0 {
             current_y += 1.0;
         }

@@ -1,4 +1,5 @@
 pub mod kle_parser;
+pub mod layout_geometry;
 pub mod qmk_json_parser;
 pub mod via;
 pub mod vial;

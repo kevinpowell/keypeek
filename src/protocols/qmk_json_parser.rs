@@ -1,3 +1,4 @@
+use super::layout_geometry::flattened_top_left_after_center_rotation;
 use super::{Key, KeyboardDefinition, KeyboardLayout};
 use serde_json::Value;
 use std::error::Error;
@@ -117,6 +118,22 @@ fn collect_layout_keys(layout: &Value) -> Result<Vec<Key>, Box<dyn Error>> {
         let y = key["y"].as_f64().unwrap_or(0.0) as f32;
         let w = key["w"].as_f64().unwrap_or(1.0) as f32;
         let h = key["h"].as_f64().unwrap_or(1.0) as f32;
+
+        // Keypeek does not support rotated keys, so we recalculate the position adjusted for rotation around the pivot point.
+        let angle_deg = key.get("r").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let pivot_x = key
+            .get("rx")
+            .and_then(|v| v.as_f64())
+            .map(|v| v as f32)
+            .unwrap_or(x);
+        let pivot_y = key
+            .get("ry")
+            .and_then(|v| v.as_f64())
+            .map(|v| v as f32)
+            .unwrap_or(y);
+
+        let (x, y) =
+            flattened_top_left_after_center_rotation(x, y, w, h, angle_deg, pivot_x, pivot_y);
 
         keys.push(Key {
             row: matrix[0],
