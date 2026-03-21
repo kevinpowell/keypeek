@@ -182,6 +182,25 @@ impl OverlayApp {
                                 });
                             ui.end_row();
 
+                            ui.label("Display duration");
+                            let mut timeout_ui =
+                                Self::timeout_to_ui_value(self.settings.draft.timeout);
+                            ui.add_sized(
+                                ui.available_size(),
+                                egui::DragValue::new(&mut timeout_ui)
+                                    .speed(50)
+                                    .range(0..=15_000)
+                                    .custom_formatter(|value, _range| {
+                                        if value >= 15_000.0 {
+                                            "∞".to_string()
+                                        } else {
+                                            format!("{} ms", value as i64)
+                                        }
+                                    }),
+                            );
+                            self.settings.draft.timeout = Self::ui_value_to_timeout(timeout_ui);
+                            ui.end_row();
+
                             ui.label("Distance from screen edge");
                             ui.add_sized(
                                 ui.available_size(),
@@ -214,27 +233,8 @@ impl OverlayApp {
                             ui.label("Auto-fit long labels");
                             ui.checkbox(
                                 &mut self.settings.draft.auto_fit_before_ellipsis,
-                                "Fit label instead of ellipses",
+                                "Fit long labels to available space",
                             );
-                            ui.end_row();
-
-                            ui.label("Display duration");
-                            let mut timeout_ui =
-                                Self::timeout_to_ui_value(self.settings.draft.timeout);
-                            ui.add_sized(
-                                ui.available_size(),
-                                egui::DragValue::new(&mut timeout_ui)
-                                    .speed(50)
-                                    .range(0..=15_000)
-                                    .custom_formatter(|value, _range| {
-                                        if value >= 15_000.0 {
-                                            "∞".to_string()
-                                        } else {
-                                            format!("{} ms", value as i64)
-                                        }
-                                    }),
-                            );
-                            self.settings.draft.timeout = Self::ui_value_to_timeout(timeout_ui);
                             ui.end_row();
                         });
                 });
