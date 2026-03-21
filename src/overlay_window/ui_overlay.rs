@@ -92,10 +92,8 @@ impl OverlayApp {
                 1.0
             };
             let scale = width_scale.min(height_scale).min(1.0);
-            let fitted_text = create_galley(
-                fit_text,
-                egui::FontId::proportional(font.size * scale),
-            );
+            let fitted_text =
+                create_galley(fit_text, egui::FontId::proportional(font.size * scale));
             return LabelGalleys {
                 symbol: None,
                 text: Some(fitted_text),

@@ -5,7 +5,7 @@ description = "Keyboard layer overlay for VIA, Vial, and ZMK"
 authors = ["Stephan Rumswinkel"]
 repository = "https://github.com/srwi/keypeek"
 readme = "README.md"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
@@ -19,7 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.149"
 egui-phosphor = "0.11.0"
 egui-file-dialog = "0.12.0"
-image = "0.25.9"
+image = "0.25.10"
 lzma-rs = "0.3"
 serialport = "4"
 zmk-studio-api = { git = "https://github.com/srwi/zmk-studio-api", features = ["serial", "ble"] }
