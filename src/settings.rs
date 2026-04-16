@@ -261,18 +261,18 @@ impl Settings {
             s.opacity = parsed.clamp(0.1, 1.0);
         }
         for index in 0..s.theme.layer_colors.len() {
-            if let Some(val) = section.get(&format!("layer_color_{index}")) {
+            if let Some(val) = section.get(format!("layer_color_{index}")) {
                 if let Ok(parsed) = val.parse() {
                     s.theme.layer_colors[index] = parsed;
                     // Fallback: If no border_color is found in settings, use layer_color
-                    if section.get(&format!("border_color_{index}")).is_none() {
+                    if section.get(format!("border_color_{index}")).is_none() {
                         s.theme.border_colors[index] = parsed;
                     }
                 }
             }
         }
         for index in 0..s.theme.border_colors.len() {
-            if let Some(val) = section.get(&format!("border_color_{index}")) {
+            if let Some(val) = section.get(format!("border_color_{index}")) {
                 if let Ok(parsed) = val.parse() {
                     s.theme.border_colors[index] = parsed;
                 }

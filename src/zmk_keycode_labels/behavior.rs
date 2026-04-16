@@ -169,13 +169,13 @@ pub fn behavior_to_layout_key(
                     .cloned()
                     .unwrap_or_else(|| format!("L{}", layer_id));
                 let hold_label = Label::with_short(name.clone(), name);
-                return Some(LayoutKey {
+                Some(LayoutKey {
                     tap: combine_labels(tap_key.tap, hold_label.clone()),
                     hold: Some(hold_label),
                     symbol: tap_key.symbol,
                     kind: KeycodeKind::Special,
                     layer_ref: Some(layer_id as u8),
-                });
+                })
             }
             // If both param1 and param2 are HID usages, it's a ModTap.
             else if *param1 >= 0x70000 && *param2 >= 0x70000 {
@@ -183,13 +183,13 @@ pub fn behavior_to_layout_key(
                     hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
                 let hold_key =
                     hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param1));
-                return Some(LayoutKey {
+                Some(LayoutKey {
                     tap: combine_labels(tap_key.tap, hold_key.tap.clone()),
                     hold: Some(hold_key.tap),
                     symbol: tap_key.symbol,
                     kind: KeycodeKind::Modifier,
                     layer_ref: None,
-                });
+                })
             } else {
                 let label = if *param2 != 0 {
                     format!("0x{:X} {} {}", behavior_id, param1, param2)

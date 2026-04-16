@@ -182,7 +182,7 @@ pub fn discover_devices() -> Vec<DiscoveredDevice> {
         d.kind != DeviceKind::Zmk || d.ble_device_id.is_some() || d.serial_port.is_some()
     });
 
-    devices.sort_by(|a, b| a.display_name().cmp(&b.display_name()));
+    devices.sort_by_key(|a| a.display_name());
     devices.dedup_by(|a, b| {
         a.vid == b.vid
             && a.pid == b.pid

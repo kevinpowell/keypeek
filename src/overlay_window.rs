@@ -88,10 +88,10 @@ impl eframe::App for OverlayApp {
         let ctx = ui.ctx();
 
         // Handle Tray Events
-        if let Ok(event) = tray_icon::TrayIconEvent::receiver().try_recv() {
-            if let tray_icon::TrayIconEvent::Click { .. } = event {
-                self.ui.settings_visible = !self.ui.settings_visible;
-            }
+        if let Ok(tray_icon::TrayIconEvent::Click { .. }) =
+            tray_icon::TrayIconEvent::receiver().try_recv()
+        {
+            self.ui.settings_visible = !self.ui.settings_visible;
         }
 
         if let Ok(event) = tray_icon::menu::MenuEvent::receiver().try_recv() {

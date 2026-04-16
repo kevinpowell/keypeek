@@ -1,8 +1,6 @@
 use image::load_from_memory;
 use tray_icon::{menu::Menu, menu::MenuItem, Icon, TrayIcon, TrayIconBuilder};
 
-#[cfg(target_os = "linux")]
-use gtk;
 
 fn create_icon() -> Icon {
     const ICON_BYTES: &[u8] = include_bytes!("../resources/icon.ico");
