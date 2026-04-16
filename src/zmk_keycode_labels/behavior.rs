@@ -1,9 +1,13 @@
 use crate::layout_key::{KeycodeKind, Label, LayoutKey};
+use std::collections::HashMap;
 use zmk_studio_api::Behavior;
 
 use super::hid_usage::hid_usage_to_layout_key;
 
-pub fn behavior_to_layout_key(behavior: &Behavior) -> Option<LayoutKey> {
+pub fn behavior_to_layout_key(
+    behavior: &Behavior,
+    layer_names: &HashMap<u32, String>,
+) -> Option<LayoutKey> {
     match behavior {
         Behavior::Transparent => None,
 
@@ -17,16 +21,17 @@ pub fn behavior_to_layout_key(behavior: &Behavior) -> Option<LayoutKey> {
             key.hold = Some(Label::new("Toggle"));
             Some(key)
         }
-        Behavior::MomentaryLayer { layer_id } => Some(layer_layout_key("MO", *layer_id)),
-        Behavior::ToggleLayer { layer_id } => Some(layer_layout_key("TG", *layer_id)),
-        Behavior::ToLayer { layer_id } => Some(layer_layout_key("TO", *layer_id)),
-        Behavior::StickyLayer { layer_id } => Some(layer_layout_key("SL", *layer_id)),
+        Behavior::MomentaryLayer { layer_id } => Some(layer_layout_key("MO", *layer_id, layer_names)),
+        Behavior::ToggleLayer { layer_id } => Some(layer_layout_key("TG", *layer_id, layer_names)),
+        Behavior::ToLayer { layer_id } => Some(layer_layout_key("TO", *layer_id, layer_names)),
+        Behavior::StickyLayer { layer_id } => Some(layer_layout_key("SL", *layer_id, layer_names)),
         Behavior::LayerTap { layer_id, tap } => {
             let tap_key = hid_usage_to_layout_key(*tap);
-            let hold_label = Label::with_short(
-                format!("L{}", layer_id),
-                format!("L{}", layer_id),
-            );
+            let name = layer_names
+                .get(layer_id)
+                .cloned()
+                .unwrap_or_else(|| format!("L{}", layer_id));
+            let hold_label = Label::with_short(name.clone(), name);
             Some(LayoutKey {
                 tap: combine_labels(tap_key.tap, hold_label.clone()),
                 hold: Some(hold_label),
@@ -156,10 +161,11 @@ pub fn behavior_to_layout_key(behavior: &Behavior) -> Option<LayoutKey> {
             if *param1 < 32 && *param2 >= 0x70000 {
                 let tap_key = hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
                 let layer_id = *param1;
-                let hold_label = Label::with_short(
-                    format!("L{}", layer_id),
-                    format!("L{}", layer_id),
-                );
+                let name = layer_names
+                    .get(&layer_id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("L{}", layer_id));
+                let hold_label = Label::with_short(name.clone(), name);
                 return Some(LayoutKey {
                     tap: combine_labels(tap_key.tap, hold_label.clone()),
                     hold: Some(hold_label),
@@ -196,11 +202,15 @@ pub fn behavior_to_layout_key(behavior: &Behavior) -> Option<LayoutKey> {
     }
 }
 
-fn layer_layout_key(abbreviation: &str, layer_id: u32) -> LayoutKey {
+fn layer_layout_key(abbreviation: &str, layer_id: u32, layer_names: &HashMap<u32, String>) -> LayoutKey {
+    let name = layer_names
+        .get(&layer_id)
+        .cloned()
+        .unwrap_or_else(|| format!("L{}", layer_id));
     LayoutKey {
         tap: Label::with_short(
-            format!("{} {}", abbreviation, layer_id),
-            format!("{}{}", abbreviation, layer_id),
+            format!("{} {}", abbreviation, name),
+            format!("{}{}", abbreviation, name),
         ),
         kind: KeycodeKind::Special,
         layer_ref: Some(layer_id as u8),

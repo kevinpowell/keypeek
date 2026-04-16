@@ -103,13 +103,26 @@ fn fetch_zmk_data_from_client<T: Read + Write>(
     }
 
     let physical_layouts = client.get_physical_layouts()?;
+    let keymap = client.get_keymap()?;
+
+    let mut layer_names = std::collections::HashMap::new();
+    for layer in keymap.layers {
+        if !layer.name.is_empty() {
+            layer_names.insert(layer.id, layer.name);
+        }
+    }
 
     let resolved_layers: Vec<Vec<Behavior>> = client.resolve_keymap()?;
     let layer_count = resolved_layers.len();
 
     let layout_keys: Vec<Vec<Option<LayoutKey>>> = resolved_layers
         .iter()
-        .map(|layer| layer.iter().map(behavior_to_layout_key).collect())
+        .map(|layer| {
+            layer
+                .iter()
+                .map(|b| behavior_to_layout_key(b, &layer_names))
+                .collect()
+        })
         .collect();
 
     // Drop the ZMK RPC connection and give transport time to settle before
