@@ -110,6 +110,13 @@ Appearance settings are saved to `settings.ini` in the app directory.
 
 <img src=".github/assets/settings_window.png" alt="Settings window screenshot" width="60%">
 
+# Screenshots
+
+Here's how it looks after the kevinpowell updates:
+
+
+<img src=".github/assets/screenshots/klp_shot_001.jpg">
+
 # License & Attribution
 
 Parts of this project are based on code from [the VIA project](https://github.com/the-via/app), which is licensed under the GNU General Public License v3.0.
