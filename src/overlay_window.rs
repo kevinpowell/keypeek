@@ -37,6 +37,7 @@ impl OverlayApp {
             quit_id: tray_setup.quit_id,
             ui: UiState {
                 settings_visible: true,
+                last_settings_visible: None,
                 settings_error: None,
                 settings_warning: None,
                 #[cfg(target_os = "macos")]
@@ -121,12 +122,15 @@ impl eframe::App for OverlayApp {
             if let ConnectionDraft::Via { json_path } = &mut self.connect.draft {
                 *json_path = path.to_string_lossy().to_string();
             }
-            self.connect_from_ui();
+            self.connect_from_ui(ctx);
         }
 
-        ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(
-            !self.ui.settings_visible,
-        ));
+        if self.ui.last_settings_visible != Some(self.ui.settings_visible) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::MousePassthrough(
+                !self.ui.settings_visible,
+            ));
+            self.ui.last_settings_visible = Some(self.ui.settings_visible);
+        }
 
         if let AppConnectionState::Connected { keyboard } = &self.session.connection {
             if self.overlay_visible() {
@@ -166,6 +170,6 @@ impl eframe::App for OverlayApp {
                 });
         }
 
-        ctx.request_repaint();
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
     }
 }

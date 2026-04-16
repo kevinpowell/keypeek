@@ -8,6 +8,7 @@ pub struct ConnectionRequest {
     pub spec: ConnectionSpec,
     pub timeout: i64,
     pub layout_name: Option<String>,
+    pub ctx: Option<eframe::egui::Context>,
 }
 
 impl ConnectionRequest {
@@ -80,8 +81,13 @@ pub fn build_connected_state(request: ConnectionRequest) -> Result<ConnectedStat
     let selected_layout_name = request.pick_layout_name(&layout_names)?;
     let definition = protocol.get_layout_definition().clone();
 
-    let keyboard = Keyboard::new(protocol, selected_layout_name.clone(), request.timeout)
-        .map_err(|e| format!("Failed to create keyboard: {e}"))?;
+    let keyboard = Keyboard::new(
+        protocol,
+        selected_layout_name.clone(),
+        request.timeout,
+        request.ctx,
+    )
+    .map_err(|e| format!("Failed to create keyboard: {e}"))?;
 
     Ok(ConnectedState {
         definition,

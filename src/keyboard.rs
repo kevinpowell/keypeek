@@ -20,6 +20,7 @@ impl Keyboard {
         protocol: Box<dyn KeyboardProtocol>,
         layout_name: String,
         timeout: i64,
+        ctx: Option<eframe::egui::Context>,
     ) -> Result<Self, String> {
         let definition = protocol.get_layout_definition();
 
@@ -56,40 +57,67 @@ impl Keyboard {
         let matrix_clone = Arc::clone(&matrix);
 
         thread::spawn(move || loop {
-            if let Ok(response) = protocol.hid_read() {
-                if response[0] == 0xff {
-                    let size = response[1] as usize;
+            match protocol.hid_read() {
+                Ok(response) => {
+                    if response.is_empty() {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    
+                    let mut state_changed = false;
 
-                    let mut default_bytes = [0u8; 4];
-                    default_bytes[..size].copy_from_slice(&response[2..2 + size]);
-                    let default_layer_state = u32::from_le_bytes(default_bytes);
+                    if response[0] == 0xff {
+                        let size = response[1] as usize;
 
-                    let mut layer_bytes = [0u8; 4];
-                    layer_bytes[..size].copy_from_slice(&response[2 + size..2 + 2 * size]);
-                    let layer_state = u32::from_le_bytes(layer_bytes);
+                        let mut default_bytes = [0u8; 4];
+                        default_bytes[..size].copy_from_slice(&response[2..2 + size]);
+                        let default_layer_state = u32::from_le_bytes(default_bytes);
 
-                    if layer_state > 1 {
-                        *time_to_hide_clone.lock().unwrap() = None;
-                    } else {
-                        let timeout = *timeout_clone.lock().unwrap();
-                        if timeout < 0 {
+                        let mut layer_bytes = [0u8; 4];
+                        layer_bytes[..size].copy_from_slice(&response[2 + size..2 + 2 * size]);
+                        let layer_state = u32::from_le_bytes(layer_bytes);
+
+                        if layer_state > 1 {
                             *time_to_hide_clone.lock().unwrap() = None;
                         } else {
-                            let time_to_hide =
-                                Instant::now() + Duration::from_millis(timeout as u64);
-                            *time_to_hide_clone.lock().unwrap() = Some(time_to_hide);
+                            let timeout = *timeout_clone.lock().unwrap();
+                            if timeout < 0 {
+                                *time_to_hide_clone.lock().unwrap() = None;
+                            } else {
+                                let time_to_hide =
+                                    Instant::now() + Duration::from_millis(timeout as u64);
+                                *time_to_hide_clone.lock().unwrap() = Some(time_to_hide);
+                            }
+                        }
+
+                        let mut layer_guard = layer_state_clone.lock().unwrap();
+                        let mut default_layer_guard = default_layer_state_clone.lock().unwrap();
+                        if *layer_guard != layer_state || *default_layer_guard != default_layer_state {
+                            *layer_guard = layer_state;
+                            *default_layer_guard = default_layer_state;
+                            state_changed = true;
+                        }
+                    } else if response[0] == 0xF1 {
+                        let row = response[1] as usize;
+                        let col = response[2] as usize;
+                        let pressed = response[3];
+                        if let Ok(mut mat) = matrix_clone.lock() {
+                            let pressed_bool = pressed != 0;
+                            if mat.is_pressed(row, col) != pressed_bool {
+                                mat.set_pressed(row, col, pressed_bool);
+                                state_changed = true;
+                            }
                         }
                     }
 
-                    *layer_state_clone.lock().unwrap() = layer_state;
-                    *default_layer_state_clone.lock().unwrap() = default_layer_state;
-                } else if response[0] == 0xF1 {
-                    let row = response[1] as usize;
-                    let col = response[2] as usize;
-                    let pressed = response[3];
-                    if let Ok(mut mat) = matrix_clone.lock() {
-                        mat.set_pressed(row, col, pressed != 0);
+                    if state_changed {
+                        if let Some(ctx) = &ctx {
+                            ctx.request_repaint();
+                        }
                     }
+                }
+                Err(_) => {
+                    thread::sleep(Duration::from_millis(10));
                 }
             }
         });

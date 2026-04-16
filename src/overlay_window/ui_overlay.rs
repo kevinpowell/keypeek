@@ -132,7 +132,7 @@ impl OverlayApp {
         let size = self.settings.active.size as f32;
         let layer_theme_color = self.settings.active.theme.layer_color(layer);
         let layer_border_color = self.settings.active.theme.border_color(layer);
-        
+
         let mut background_color = Self::to_egui_color(layer_theme_color);
         let mut border_color = Self::to_egui_color(layer_border_color);
         let mut font_color = Self::to_egui_color(self.settings.active.theme.font_color);
@@ -158,7 +158,8 @@ impl OverlayApp {
 
         if desaturate && layer != 0 {
             let layer0_color = Self::to_egui_color(self.settings.active.theme.layer_colors[0]);
-            let layer0_border_color = Self::to_egui_color(self.settings.active.theme.border_colors[0]);
+            let layer0_border_color =
+                Self::to_egui_color(self.settings.active.theme.border_colors[0]);
             background_color = background_color.lerp_to_gamma(layer0_color, DESATURATE_FACTOR);
             border_color = border_color.lerp_to_gamma(layer0_border_color, DESATURATE_FACTOR);
             font_color = font_color.gamma_multiply(1.0 - DESATURATE_FACTOR);
@@ -225,7 +226,6 @@ impl OverlayApp {
         });
         ui.add_space(4.0);
     }
-
 
     pub(super) fn draw_overlay_window(&self, ctx: &egui::Context, keyboard: &Keyboard) {
         let anchor_params = self.get_anchor_params();

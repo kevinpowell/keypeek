@@ -108,7 +108,7 @@ impl OverlayApp {
         }
     }
 
-    pub(super) fn connect_from_ui(&mut self) {
+    pub(super) fn connect_from_ui(&mut self, ctx: &eframe::egui::Context) {
         if matches!(
             self.session.connection,
             AppConnectionState::Connected { .. }
@@ -132,10 +132,10 @@ impl OverlayApp {
             }
         }
 
-        self.begin_connect_with_current_draft();
+        self.begin_connect_with_current_draft(ctx);
     }
 
-    fn begin_connect_with_current_draft(&mut self) {
+    fn begin_connect_with_current_draft(&mut self, ctx: &eframe::egui::Context) {
         if self.connect.pending_connect.is_some() {
             return;
         }
@@ -156,6 +156,7 @@ impl OverlayApp {
             } else {
                 Some(self.session.draft_layout_name.clone())
             },
+            ctx: Some(ctx.clone()),
         };
 
         self.connect.pending_connect = Some(ConnectionTask::start(request));

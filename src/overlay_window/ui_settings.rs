@@ -109,7 +109,7 @@ impl OverlayApp {
                                                     )
                                                     .clicked()
                                                 {
-                                                    self.connect_from_ui();
+                                                    self.connect_from_ui(ctx);
                                                 }
                                             });
                                         },

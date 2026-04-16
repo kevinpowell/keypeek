@@ -21,7 +21,9 @@ pub fn behavior_to_layout_key(
             key.hold = Some(Label::new("Toggle"));
             Some(key)
         }
-        Behavior::MomentaryLayer { layer_id } => Some(layer_layout_key("MO", *layer_id, layer_names)),
+        Behavior::MomentaryLayer { layer_id } => {
+            Some(layer_layout_key("MO", *layer_id, layer_names))
+        }
         Behavior::ToggleLayer { layer_id } => Some(layer_layout_key("TG", *layer_id, layer_names)),
         Behavior::ToLayer { layer_id } => Some(layer_layout_key("TO", *layer_id, layer_names)),
         Behavior::StickyLayer { layer_id } => Some(layer_layout_key("SL", *layer_id, layer_names)),
@@ -159,7 +161,8 @@ pub fn behavior_to_layout_key(
             // Heuristic for custom ModTap and LayerTap behaviors (e.g., u_mt, u_lt)
             // If param1 is a small integer (layer ID) and param2 is a HID usage, it's a LayerTap.
             if *param1 < 32 && *param2 >= 0x70000 {
-                let tap_key = hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
+                let tap_key =
+                    hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
                 let layer_id = *param1;
                 let name = layer_names
                     .get(&layer_id)
@@ -176,8 +179,10 @@ pub fn behavior_to_layout_key(
             }
             // If both param1 and param2 are HID usages, it's a ModTap.
             else if *param1 >= 0x70000 && *param2 >= 0x70000 {
-                let tap_key = hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
-                let hold_key = hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param1));
+                let tap_key =
+                    hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
+                let hold_key =
+                    hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param1));
                 return Some(LayoutKey {
                     tap: combine_labels(tap_key.tap, hold_key.tap.clone()),
                     hold: Some(hold_key.tap),
@@ -202,7 +207,11 @@ pub fn behavior_to_layout_key(
     }
 }
 
-fn layer_layout_key(abbreviation: &str, layer_id: u32, layer_names: &HashMap<u32, String>) -> LayoutKey {
+fn layer_layout_key(
+    abbreviation: &str,
+    layer_id: u32,
+    layer_names: &HashMap<u32, String>,
+) -> LayoutKey {
     let name = layer_names
         .get(&layer_id)
         .cloned()

@@ -42,6 +42,7 @@ impl ConnectionDraft {
 
 pub struct UiState {
     pub settings_visible: bool,
+    pub last_settings_visible: Option<bool>,
     pub settings_error: Option<String>,
     pub settings_warning: Option<String>,
     #[cfg(target_os = "macos")]
