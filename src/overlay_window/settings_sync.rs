@@ -13,6 +13,7 @@ impl OverlayApp {
             || self.settings.active.auto_fit_before_ellipsis
                 != self.settings.draft.auto_fit_before_ellipsis
             || self.settings.active.margin != self.settings.draft.margin
+            || self.settings.active.opacity != self.settings.draft.opacity
             || self.settings.active.position != self.settings.draft.position
             || self.settings.active.timeout != self.settings.draft.timeout
             || self.settings.active.theme != self.settings.draft.theme;
@@ -26,6 +27,7 @@ impl OverlayApp {
         self.settings.active.auto_fit_before_ellipsis =
             self.settings.draft.auto_fit_before_ellipsis;
         self.settings.active.margin = self.settings.draft.margin;
+        self.settings.active.opacity = self.settings.draft.opacity;
         self.settings.active.position = self.settings.draft.position;
         self.settings.active.timeout = self.settings.draft.timeout;
         self.settings.active.theme = self.settings.draft.theme.clone();

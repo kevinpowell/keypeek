@@ -210,6 +210,14 @@ impl OverlayApp {
                             );
                             ui.end_row();
 
+                            ui.label("Opacity");
+                            ui.add_sized(
+                                ui.available_size(),
+                                egui::Slider::new(&mut self.settings.draft.opacity, 0.1..=1.0)
+                                    .custom_formatter(|n, _| format!("{:.0}%", n * 100.0)),
+                            );
+                            ui.end_row();
+
                             ui.label("Key unit size");
                             ui.add_sized(
                                 ui.available_size(),

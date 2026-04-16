@@ -157,6 +157,11 @@ impl OverlayApp {
             font_color = font_color.gamma_multiply(1.0 - DESATURATE_FACTOR);
         }
 
+        let opacity = self.settings.active.opacity;
+        background_color = background_color.gamma_multiply(opacity);
+        border_color = border_color.gamma_multiply(opacity);
+        font_color = font_color.gamma_multiply(opacity);
+
         (background_color, border_color, 1.0, font_color)
     }
 
