@@ -3,7 +3,6 @@ use super::zmk_rpc::{self, ZmkData, ZmkTransport};
 use super::{Key, KeyboardDefinition, KeyboardLayout, KeyboardProtocol};
 use crate::layout_key::LayoutKey;
 use hidapi::HidApi;
-use qmk_via_api::api::KeyboardApi;
 use std::error::Error;
 use std::time::{Duration, Instant};
 
@@ -11,7 +10,7 @@ type LayerKeys3d = Vec<Vec<Vec<Option<LayoutKey>>>>;
 const VIA_USAGE_PAGE: u16 = 0xff60;
 
 pub struct ZmkProtocol {
-    api: KeyboardApi,
+    device: hidapi::HidDevice,
     definition: KeyboardDefinition,
     layout_keys: LayerKeys3d,
     layer_count: usize,
@@ -26,7 +25,7 @@ impl ZmkProtocol {
         let zmk_data = zmk_rpc::fetch_zmk_data(transport)?;
         wait_for_hid_reappearance(vid, pid, VIA_USAGE_PAGE, Duration::from_secs(8))
             .map_err(std::io::Error::other)?;
-        let api = open_keyboard_api(vid, pid).map_err(|e| {
+        let device = open_hid_device(vid, pid, VIA_USAGE_PAGE).map_err(|e| {
             std::io::Error::other(format!(
                 "Failed to connect HID ({vid:04x}:{pid:04x}) after reappearance: {e}"
             ))
@@ -34,7 +33,7 @@ impl ZmkProtocol {
         let (definition, layout_keys, layer_count) = build_from_zmk_data(vid, pid, zmk_data)?;
 
         Ok(Self {
-            api,
+            device,
             definition,
             layout_keys,
             layer_count,
@@ -42,8 +41,19 @@ impl ZmkProtocol {
     }
 }
 
-fn open_keyboard_api(vid: u16, pid: u16) -> Result<KeyboardApi, String> {
-    KeyboardApi::new(vid, pid, VIA_USAGE_PAGE).map_err(|e| e.to_string())
+fn open_hid_device(vid: u16, pid: u16, usage_page: u16) -> Result<hidapi::HidDevice, String> {
+    let api = HidApi::new().map_err(|e| format!("hidapi init failed: {e}"))?;
+    for device in api.device_list() {
+        if device.vendor_id() == vid
+            && device.product_id() == pid
+            && device.usage_page() == usage_page
+        {
+            return api.open_path(device.path()).map_err(|e| e.to_string());
+        }
+    }
+    Err(format!(
+        "Device {vid:04x}:{pid:04x} with usage page {usage_page:04x} not found"
+    ))
 }
 
 fn wait_for_hid_reappearance(
@@ -89,9 +99,12 @@ impl KeyboardProtocol for ZmkProtocol {
     }
 
     fn hid_read(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-        self.api
-            .hid_read()
-            .map_err(|e| format!("HID read error: {e}").into())
+        let mut buf = [0u8; 64];
+        let len = self
+            .device
+            .read(&mut buf)
+            .map_err(|e| format!("HID read error: {e}"))?;
+        Ok(buf[..len].to_vec())
     }
 }
 
