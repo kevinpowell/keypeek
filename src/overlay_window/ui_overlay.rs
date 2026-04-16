@@ -131,29 +131,36 @@ impl OverlayApp {
 
         let size = self.settings.active.size as f32;
         let layer_theme_color = self.settings.active.theme.layer_color(layer);
+        let layer_border_color = self.settings.active.theme.border_color(layer);
+        
         let mut background_color = Self::to_egui_color(layer_theme_color);
+        let mut border_color = Self::to_egui_color(layer_border_color);
         let mut font_color = Self::to_egui_color(self.settings.active.theme.font_color);
+
+        let border_thickness = 0.03 * size;
 
         if pressed {
             return (
                 background_color.lerp_to_gamma(egui::Color32::WHITE, 0.2),
-                background_color.lerp_to_gamma(egui::Color32::WHITE, 0.7),
-                0.03 * size,
+                border_color.lerp_to_gamma(egui::Color32::WHITE, 0.7),
+                border_thickness,
                 font_color.lerp_to_gamma(egui::Color32::WHITE, 0.4),
             );
         }
 
         if kind == KeycodeKind::Special {
             background_color = background_color.lerp_to_gamma(BLACK, 0.6);
+            border_color = border_color.lerp_to_gamma(BLACK, 0.6);
         } else if kind == KeycodeKind::Modifier {
             background_color = background_color.lerp_to_gamma(BLACK, 0.3);
+            border_color = border_color.lerp_to_gamma(BLACK, 0.3);
         }
 
-        let mut border_color = background_color.lerp_to_gamma(BLACK, 0.2);
         if desaturate && layer != 0 {
             let layer0_color = Self::to_egui_color(self.settings.active.theme.layer_colors[0]);
+            let layer0_border_color = Self::to_egui_color(self.settings.active.theme.border_colors[0]);
             background_color = background_color.lerp_to_gamma(layer0_color, DESATURATE_FACTOR);
-            border_color = border_color.lerp_to_gamma(layer0_color, DESATURATE_FACTOR);
+            border_color = border_color.lerp_to_gamma(layer0_border_color, DESATURATE_FACTOR);
             font_color = font_color.gamma_multiply(1.0 - DESATURATE_FACTOR);
         }
 
@@ -162,7 +169,7 @@ impl OverlayApp {
         border_color = border_color.gamma_multiply(opacity);
         font_color = font_color.gamma_multiply(opacity);
 
-        (background_color, border_color, 1.0, font_color)
+        (background_color, border_color, border_thickness, font_color)
     }
 
     pub(super) fn to_egui_color(color: ThemeColor) -> egui::Color32 {
@@ -185,6 +192,40 @@ impl OverlayApp {
         });
         ui.add_space(4.0);
     }
+
+    pub(super) fn theme_layer_color_entry(
+        ui: &mut egui::Ui,
+        label: &str,
+        bg_color: &mut ThemeColor,
+        border_color: &mut ThemeColor,
+    ) {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let mut display_border = Self::to_egui_color(*border_color);
+                if ui
+                    .color_edit_button_srgba(&mut display_border)
+                    .on_hover_text("Border Color")
+                    .changed()
+                {
+                    *border_color = Self::from_egui_color(display_border);
+                }
+
+                ui.add_space(8.0); // Spacing between the two pickers
+
+                let mut display_bg = Self::to_egui_color(*bg_color);
+                if ui
+                    .color_edit_button_srgba(&mut display_bg)
+                    .on_hover_text("Background Color")
+                    .changed()
+                {
+                    *bg_color = Self::from_egui_color(display_bg);
+                }
+            });
+        });
+        ui.add_space(4.0);
+    }
+
 
     pub(super) fn draw_overlay_window(&self, ctx: &egui::Context, keyboard: &Keyboard) {
         let anchor_params = self.get_anchor_params();

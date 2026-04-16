@@ -130,6 +130,7 @@ impl FromStr for ThemeColor {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ThemeSettings {
     pub layer_colors: [ThemeColor; 7],
+    pub border_colors: [ThemeColor; 7],
     pub font_color: ThemeColor,
 }
 
@@ -141,21 +142,31 @@ impl ThemeSettings {
             self.layer_colors[6]
         }
     }
+
+    pub fn border_color(&self, layer: u8) -> ThemeColor {
+        if let Some(color) = self.border_colors.get(layer as usize) {
+            *color
+        } else {
+            self.border_colors[6]
+        }
+    }
 }
 
 impl Default for ThemeSettings {
     fn default() -> Self {
         const ALPHA: u8 = 239;
+        let layer_colors = [
+            ThemeColor::new(83, 83, 83, ALPHA),
+            ThemeColor::new(80, 140, 115, ALPHA),
+            ThemeColor::new(100, 115, 150, ALPHA),
+            ThemeColor::new(140, 110, 150, ALPHA),
+            ThemeColor::new(95, 121, 127, ALPHA),
+            ThemeColor::new(147, 137, 110, ALPHA),
+            ThemeColor::new(127, 127, 127, ALPHA),
+        ];
         Self {
-            layer_colors: [
-                ThemeColor::new(83, 83, 83, ALPHA),
-                ThemeColor::new(80, 140, 115, ALPHA),
-                ThemeColor::new(100, 115, 150, ALPHA),
-                ThemeColor::new(140, 110, 150, ALPHA),
-                ThemeColor::new(95, 121, 127, ALPHA),
-                ThemeColor::new(147, 137, 110, ALPHA),
-                ThemeColor::new(127, 127, 127, ALPHA),
-            ],
+            layer_colors,
+            border_colors: layer_colors,
             font_color: ThemeColor::new(255, 255, 255, 255),
         }
     }
@@ -208,6 +219,9 @@ impl Settings {
         for (index, color) in self.theme.layer_colors.iter().enumerate() {
             section.set(format!("layer_color_{index}"), color.to_string());
         }
+        for (index, color) in self.theme.border_colors.iter().enumerate() {
+            section.set(format!("border_color_{index}"), color.to_string());
+        }
         section.set("font_color", self.theme.font_color.to_string());
         conf.write_to_file(path)
     }
@@ -250,6 +264,17 @@ impl Settings {
             if let Some(val) = section.get(&format!("layer_color_{index}")) {
                 if let Ok(parsed) = val.parse() {
                     s.theme.layer_colors[index] = parsed;
+                    // Fallback: If no border_color is found in settings, use layer_color
+                    if section.get(&format!("border_color_{index}")).is_none() {
+                        s.theme.border_colors[index] = parsed;
+                    }
+                }
+            }
+        }
+        for index in 0..s.theme.border_colors.len() {
+            if let Some(val) = section.get(&format!("border_color_{index}")) {
+                if let Ok(parsed) = val.parse() {
+                    s.theme.border_colors[index] = parsed;
                 }
             }
         }

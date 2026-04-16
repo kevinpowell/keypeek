@@ -260,43 +260,50 @@ impl OverlayApp {
                                 "Font color",
                                 &mut self.settings.draft.theme.font_color,
                             );
-                            Self::theme_color_entry(
+                            Self::theme_layer_color_entry(
                                 ui,
-                                "Layer 0 color",
+                                "Layer 0",
                                 &mut self.settings.draft.theme.layer_colors[0],
+                                &mut self.settings.draft.theme.border_colors[0],
                             );
-                            Self::theme_color_entry(
+                            Self::theme_layer_color_entry(
                                 ui,
-                                "Layer 1 color",
+                                "Layer 1",
                                 &mut self.settings.draft.theme.layer_colors[1],
+                                &mut self.settings.draft.theme.border_colors[1],
                             );
-                            Self::theme_color_entry(
+                            Self::theme_layer_color_entry(
                                 ui,
-                                "Layer 2 color",
+                                "Layer 2",
                                 &mut self.settings.draft.theme.layer_colors[2],
+                                &mut self.settings.draft.theme.border_colors[2],
                             );
                         });
 
                         columns[1].vertical(|ui| {
-                            Self::theme_color_entry(
+                            Self::theme_layer_color_entry(
                                 ui,
-                                "Layer 3 color",
+                                "Layer 3",
                                 &mut self.settings.draft.theme.layer_colors[3],
+                                &mut self.settings.draft.theme.border_colors[3],
                             );
-                            Self::theme_color_entry(
+                            Self::theme_layer_color_entry(
                                 ui,
-                                "Layer 4 color",
+                                "Layer 4",
                                 &mut self.settings.draft.theme.layer_colors[4],
+                                &mut self.settings.draft.theme.border_colors[4],
                             );
-                            Self::theme_color_entry(
+                            Self::theme_layer_color_entry(
                                 ui,
-                                "Layer 5 color",
+                                "Layer 5",
                                 &mut self.settings.draft.theme.layer_colors[5],
+                                &mut self.settings.draft.theme.border_colors[5],
                             );
-                            Self::theme_color_entry(
+                            Self::theme_layer_color_entry(
                                 ui,
-                                "Other layers color",
+                                "Other layers",
                                 &mut self.settings.draft.theme.layer_colors[6],
+                                &mut self.settings.draft.theme.border_colors[6],
                             );
                         });
                     });
