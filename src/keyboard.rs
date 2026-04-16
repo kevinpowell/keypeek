@@ -63,7 +63,7 @@ impl Keyboard {
                         thread::sleep(Duration::from_millis(10));
                         continue;
                     }
-                    
+
                     let mut state_changed = false;
 
                     if response[0] == 0xff {
@@ -92,7 +92,9 @@ impl Keyboard {
 
                         let mut layer_guard = layer_state_clone.lock().unwrap();
                         let mut default_layer_guard = default_layer_state_clone.lock().unwrap();
-                        if *layer_guard != layer_state || *default_layer_guard != default_layer_state {
+                        if *layer_guard != layer_state
+                            || *default_layer_guard != default_layer_state
+                        {
                             *layer_guard = layer_state;
                             *default_layer_guard = default_layer_state;
                             state_changed = true;
