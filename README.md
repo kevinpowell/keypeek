@@ -1,5 +1,7 @@
 # KeyPeek <img src="resources/icon.svg" align="right" width="15%"/>
 
+HEADS UP: this is a fork.  Changes have been made, and may not reflect the intent of the original author.
+
 KeyPeek provides a live on-screen overlay of your keyboard, mirroring the active base and momentary layers. It is especially useful when learning complex multi-layer layouts or using boards with missing legends. The overlay updates instantly when layers change, so the view always matches your firmware state. KeyPeek currently supports QMK, Vial, and ZMK keyboards.
 
 <img src=".github/assets/demo.gif" alt="KeyPeek in action">
