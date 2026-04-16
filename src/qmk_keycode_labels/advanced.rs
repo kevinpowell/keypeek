@@ -83,7 +83,7 @@ pub fn get_advanced_layout_key(keycode_bytes: u16) -> Option<LayoutKey> {
                 .unwrap_or_else(|| format!("0x{:02X}", keycode));
 
             Some(LayoutKey {
-                tap: Label::new(format!("MT({},{})", mod_str, keycode_str)),
+                tap: Label::new(format!("{}({})", keycode_str, mod_str)),
                 kind: KeycodeKind::Modifier,
                 ..Default::default()
             })
@@ -127,7 +127,7 @@ pub fn get_advanced_layout_key(keycode_bytes: u16) -> Option<LayoutKey> {
                 .unwrap_or_else(|| format!("0x{:02X}", keycode));
 
             Some(LayoutKey {
-                tap: Label::new(format!("LT({},{})", layer, keycode_str)),
+                tap: Label::new(format!("{}(L{})", keycode_str, layer)),
                 kind: KeycodeKind::Modifier,
                 layer_ref: Some(layer as u8),
                 ..Default::default()
@@ -140,33 +140,33 @@ pub fn get_advanced_layout_key(keycode_bytes: u16) -> Option<LayoutKey> {
 fn mod_value_to_string(mod_mask: u16) -> String {
     let mut mods = Vec::new();
     if mod_mask & MOD_LCTL != 0 {
-        mods.push("MOD_LCTL");
+        mods.push("Ctrl");
     }
     if mod_mask & MOD_LSFT != 0 {
-        mods.push("MOD_LSFT");
+        mods.push("Shift");
     }
     if mod_mask & MOD_LALT != 0 {
-        mods.push("MOD_LALT");
+        mods.push("Alt");
     }
     if mod_mask & MOD_LGUI != 0 {
-        mods.push("MOD_LGUI");
+        mods.push("Win");
     }
     if mod_mask & MOD_RCTL != 0 {
-        mods.push("MOD_RCTL");
+        mods.push("Ctrl");
     }
     if mod_mask & MOD_RSFT != 0 {
-        mods.push("MOD_RSFT");
+        mods.push("Shift");
     }
     if mod_mask & MOD_RALT != 0 {
-        mods.push("MOD_RALT");
+        mods.push("Alt");
     }
     if mod_mask & MOD_RGUI != 0 {
-        mods.push("MOD_RGUI");
+        mods.push("Win");
     }
 
     if mods.is_empty() {
         "None".to_string()
     } else {
-        mods.join(" | ")
+        mods.join("|")
     }
 }

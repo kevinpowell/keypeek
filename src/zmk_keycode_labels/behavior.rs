@@ -23,12 +23,13 @@ pub fn behavior_to_layout_key(behavior: &Behavior) -> Option<LayoutKey> {
         Behavior::StickyLayer { layer_id } => Some(layer_layout_key("SL", *layer_id)),
         Behavior::LayerTap { layer_id, tap } => {
             let tap_key = hid_usage_to_layout_key(*tap);
+            let hold_label = Label::with_short(
+                format!("L{}", layer_id),
+                format!("L{}", layer_id),
+            );
             Some(LayoutKey {
-                tap: tap_key.tap,
-                hold: Some(Label::with_short(
-                    format!("L{}", layer_id),
-                    format!("L{}", layer_id),
-                )),
+                tap: combine_labels(tap_key.tap, hold_label.clone()),
+                hold: Some(hold_label),
                 symbol: tap_key.symbol,
                 kind: KeycodeKind::Special,
                 layer_ref: Some(*layer_id as u8),
@@ -38,7 +39,7 @@ pub fn behavior_to_layout_key(behavior: &Behavior) -> Option<LayoutKey> {
             let hold_key = hid_usage_to_layout_key(*hold);
             let tap_key = hid_usage_to_layout_key(*tap);
             Some(LayoutKey {
-                tap: tap_key.tap,
+                tap: combine_labels(tap_key.tap, hold_key.tap.clone()),
                 hold: Some(hold_key.tap),
                 symbol: tap_key.symbol,
                 kind: KeycodeKind::Modifier,
@@ -150,17 +151,47 @@ pub fn behavior_to_layout_key(behavior: &Behavior) -> Option<LayoutKey> {
             param1,
             param2,
         } => {
-            let label = if *param2 != 0 {
-                format!("0x{:X} {} {}", behavior_id, param1, param2)
-            } else if *param1 != 0 {
-                format!("0x{:X} {}", behavior_id, param1)
+            // Heuristic for custom ModTap and LayerTap behaviors (e.g., u_mt, u_lt)
+            // If param1 is a small integer (layer ID) and param2 is a HID usage, it's a LayerTap.
+            if *param1 < 32 && *param2 >= 0x70000 {
+                let tap_key = hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
+                let layer_id = *param1;
+                let hold_label = Label::with_short(
+                    format!("L{}", layer_id),
+                    format!("L{}", layer_id),
+                );
+                return Some(LayoutKey {
+                    tap: combine_labels(tap_key.tap, hold_label.clone()),
+                    hold: Some(hold_label),
+                    symbol: tap_key.symbol,
+                    kind: KeycodeKind::Special,
+                    layer_ref: Some(layer_id as u8),
+                });
+            }
+            // If both param1 and param2 are HID usages, it's a ModTap.
+            else if *param1 >= 0x70000 && *param2 >= 0x70000 {
+                let tap_key = hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param2));
+                let hold_key = hid_usage_to_layout_key(zmk_studio_api::HidUsage::from_encoded(*param1));
+                return Some(LayoutKey {
+                    tap: combine_labels(tap_key.tap, hold_key.tap.clone()),
+                    hold: Some(hold_key.tap),
+                    symbol: tap_key.symbol,
+                    kind: KeycodeKind::Modifier,
+                    layer_ref: None,
+                });
             } else {
-                format!("0x{:X}", behavior_id)
-            };
-            Some(LayoutKey {
-                tap: Label::new(label),
-                ..Default::default()
-            })
+                let label = if *param2 != 0 {
+                    format!("0x{:X} {} {}", behavior_id, param1, param2)
+                } else if *param1 != 0 {
+                    format!("0x{:X} {}", behavior_id, param1)
+                } else {
+                    format!("0x{:X}", behavior_id)
+                };
+                Some(LayoutKey {
+                    tap: Label::new(label),
+                    ..Default::default()
+                })
+            }
         }
     }
 }
@@ -175,4 +206,27 @@ fn layer_layout_key(abbreviation: &str, layer_id: u32) -> LayoutKey {
         layer_ref: Some(layer_id as u8),
         ..Default::default()
     }
+}
+
+fn combine_labels(tap: Label, hold: Label) -> Label {
+    let full = if tap.full.is_empty() {
+        format!("({})", hold.full)
+    } else {
+        format!("{}({})", tap.full, hold.full)
+    };
+
+    let short = match (tap.short, hold.short) {
+        (Some(ts), Some(hs)) => Some(format!("{}({})", ts, hs)),
+        (Some(ts), None) => Some(format!("{}({})", ts, hold.full)),
+        (None, Some(hs)) => {
+            if tap.full.is_empty() {
+                Some(format!("({})", hs))
+            } else {
+                Some(format!("{}({})", tap.full, hs))
+            }
+        }
+        (None, None) => None,
+    };
+
+    Label { full, short }
 }
