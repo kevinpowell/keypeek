@@ -1,5 +1,6 @@
 use crate::device_discovery::DiscoveredDevice;
 use crate::settings::Settings;
+use crate::tray::TraySetup;
 
 use eframe::egui;
 
@@ -16,6 +17,8 @@ const SETTINGS_FILE: &str = "settings.ini";
 
 pub struct OverlayApp {
     _tray_icon: tray_icon::TrayIcon,
+    settings_id: tray_icon::menu::MenuId,
+    quit_id: tray_icon::menu::MenuId,
     ui: UiState,
     settings: SettingsState,
     session: SessionState,
@@ -24,12 +27,14 @@ pub struct OverlayApp {
 
 impl OverlayApp {
     pub fn new(
-        tray_icon: tray_icon::TrayIcon,
+        tray_setup: TraySetup,
         base_settings: Settings,
         available_devices: Vec<DiscoveredDevice>,
     ) -> Self {
         Self {
-            _tray_icon: tray_icon,
+            _tray_icon: tray_setup.tray_icon,
+            settings_id: tray_setup.settings_id,
+            quit_id: tray_setup.quit_id,
             ui: UiState {
                 settings_visible: true,
                 settings_error: None,
@@ -72,7 +77,29 @@ impl eframe::App for OverlayApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "linux")]
+        {
+            while gtk::events_pending() {
+                gtk::main_iteration_do(false);
+            }
+        }
+
         let ctx = ui.ctx();
+
+        // Handle Tray Events
+        if let Ok(event) = tray_icon::TrayIconEvent::receiver().try_recv() {
+            if let tray_icon::TrayIconEvent::Click { .. } = event {
+                self.ui.settings_visible = !self.ui.settings_visible;
+            }
+        }
+
+        if let Ok(event) = tray_icon::menu::MenuEvent::receiver().try_recv() {
+            if event.id == self.settings_id {
+                self.ui.settings_visible = !self.ui.settings_visible;
+            } else if event.id == self.quit_id {
+                std::process::exit(0);
+            }
+        }
 
         // On macOS, with_maximized(true) doesn't work for undecorated transparent
         // windows. Explicitly size the window to fill the monitor on the first frame.
