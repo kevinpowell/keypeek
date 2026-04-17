@@ -47,7 +47,9 @@ impl Keyboard {
                         // By-position takes precedence over by-hex-code
                         if let Some(override_label) = overrides_by_position.get(&pos_key) {
                             key.tap = Label::new(override_label.clone());
-                        } else if let Some(override_label) = overrides_by_hex_code.get(&key.tap.full) {
+                        } else if let Some(override_label) =
+                            overrides_by_hex_code.get(&key.tap.full)
+                        {
                             key.tap = Label::new(override_label.clone());
                         }
                     }
