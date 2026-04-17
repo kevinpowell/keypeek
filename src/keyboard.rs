@@ -38,18 +38,16 @@ impl Keyboard {
         let mut keys = protocol.read_all_keys(layers, definition.rows, definition.cols);
 
         // Apply general legend overrides
-        for layer_idx in 0..keys.len() {
-            for row_idx in 0..keys[layer_idx].len() {
-                for col_idx in 0..keys[layer_idx][row_idx].len() {
-                    if let Some(ref mut key) = keys[layer_idx][row_idx][col_idx] {
+        for (layer_idx, layer_keys) in keys.iter_mut().enumerate() {
+            for (row_idx, row_keys) in layer_keys.iter_mut().enumerate() {
+                for (col_idx, key_opt) in row_keys.iter_mut().enumerate() {
+                    if let Some(key) = key_opt {
                         let pos_key = format!("{}_{}_{}", layer_idx, row_idx, col_idx);
 
                         // By-position takes precedence over by-hex-code
                         if let Some(override_label) = overrides_by_position.get(&pos_key) {
                             key.tap = Label::new(override_label.clone());
-                        } else if let Some(override_label) =
-                            overrides_by_hex_code.get(&key.tap.full)
-                        {
+                        } else if let Some(override_label) = overrides_by_hex_code.get(&key.tap.full) {
                             key.tap = Label::new(override_label.clone());
                         }
                     }
