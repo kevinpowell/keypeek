@@ -183,8 +183,8 @@ pub struct Settings {
     pub margin: u32,
     pub opacity: f32,
     pub theme: ThemeSettings,
-    pub legend_overrides_by_position: HashMap<String, String>,
-    pub legend_overrides_by_hex_code: HashMap<String, String>,
+    pub legend_overrides_by_position: HashMap<String, HashMap<String, String>>,
+    pub legend_overrides_by_hex_code: HashMap<String, HashMap<String, String>>,
 }
 
 impl Default for Settings {
@@ -229,14 +229,28 @@ impl Settings {
         }
         section.set("font_color", self.theme.font_color.to_string());
 
-        let mut pos_section = conf.with_section(Some("legend_overrides_by_position"));
-        for (k, v) in &self.legend_overrides_by_position {
-            pos_section.set(k, v);
+        for (dev_name, overrides) in &self.legend_overrides_by_position {
+            let sec_name = if dev_name == "default" {
+                "legend_overrides_by_position".to_string()
+            } else {
+                format!("legend_overrides_by_position.{}", dev_name)
+            };
+            let mut pos_section = conf.with_section(Some(sec_name));
+            for (k, v) in overrides {
+                pos_section.set(k, v);
+            }
         }
 
-        let mut hex_section = conf.with_section(Some("legend_overrides_by_hex_code"));
-        for (k, v) in &self.legend_overrides_by_hex_code {
-            hex_section.set(k, v);
+        for (dev_name, overrides) in &self.legend_overrides_by_hex_code {
+            let sec_name = if dev_name == "default" {
+                "legend_overrides_by_hex_code".to_string()
+            } else {
+                format!("legend_overrides_by_hex_code.{}", dev_name)
+            };
+            let mut hex_section = conf.with_section(Some(sec_name));
+            for (k, v) in overrides {
+                hex_section.set(k, v);
+            }
         }
 
         conf.write_to_file(path)
@@ -300,17 +314,43 @@ impl Settings {
             }
         }
 
-        if let Some(pos_section) = conf.section(Some("legend_overrides_by_position")) {
-            for (k, v) in pos_section.iter() {
-                s.legend_overrides_by_position
-                    .insert(k.to_string(), v.to_string());
-            }
-        }
+        for (sec_name, props) in conf.iter() {
+            if let Some(name) = sec_name {
+                if name.starts_with("legend_overrides_by_position") {
+                    let dev_name = if name == "legend_overrides_by_position" {
+                        "default"
+                    } else if let Some(suffix) = name.strip_prefix("legend_overrides_by_position.")
+                    {
+                        suffix
+                    } else {
+                        continue;
+                    };
 
-        if let Some(hex_section) = conf.section(Some("legend_overrides_by_hex_code")) {
-            for (k, v) in hex_section.iter() {
-                s.legend_overrides_by_hex_code
-                    .insert(k.to_string(), v.to_string());
+                    let map = s
+                        .legend_overrides_by_position
+                        .entry(dev_name.to_string())
+                        .or_default();
+                    for (k, v) in props.iter() {
+                        map.insert(k.to_string(), v.to_string());
+                    }
+                } else if name.starts_with("legend_overrides_by_hex_code") {
+                    let dev_name = if name == "legend_overrides_by_hex_code" {
+                        "default"
+                    } else if let Some(suffix) = name.strip_prefix("legend_overrides_by_hex_code.")
+                    {
+                        suffix
+                    } else {
+                        continue;
+                    };
+
+                    let map = s
+                        .legend_overrides_by_hex_code
+                        .entry(dev_name.to_string())
+                        .or_default();
+                    for (k, v) in props.iter() {
+                        map.insert(k.to_string(), v.to_string());
+                    }
+                }
             }
         }
 

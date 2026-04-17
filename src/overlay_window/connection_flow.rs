@@ -140,6 +140,23 @@ impl OverlayApp {
             return;
         }
 
+        let selected_device = match self
+            .connect
+            .selected_device_index
+            .and_then(|i| self.connect.available_devices.get(i))
+        {
+            Some(dev) => dev,
+            None => {
+                self.ui.settings_error = Some("No device selected".to_string());
+                return;
+            }
+        };
+
+        let mut device_name = selected_device.base_name.clone();
+        if let Some(idx) = device_name.find(" [") {
+            device_name.truncate(idx);
+        }
+
         let spec = match self.build_connection_spec() {
             Ok(cfg) => cfg,
             Err(e) => {
@@ -147,6 +164,38 @@ impl OverlayApp {
                 return;
             }
         };
+
+        let mut legend_overrides_by_position = self
+            .settings
+            .active
+            .legend_overrides_by_position
+            .get("default")
+            .cloned()
+            .unwrap_or_default();
+        if let Some(dev_overrides) = self
+            .settings
+            .active
+            .legend_overrides_by_position
+            .get(&device_name)
+        {
+            legend_overrides_by_position.extend(dev_overrides.clone());
+        }
+
+        let mut legend_overrides_by_hex_code = self
+            .settings
+            .active
+            .legend_overrides_by_hex_code
+            .get("default")
+            .cloned()
+            .unwrap_or_default();
+        if let Some(dev_overrides) = self
+            .settings
+            .active
+            .legend_overrides_by_hex_code
+            .get(&device_name)
+        {
+            legend_overrides_by_hex_code.extend(dev_overrides.clone());
+        }
 
         let request = ConnectionRequest {
             spec,
@@ -157,8 +206,8 @@ impl OverlayApp {
                 Some(self.session.draft_layout_name.clone())
             },
             ctx: Some(ctx.clone()),
-            legend_overrides_by_position: self.settings.active.legend_overrides_by_position.clone(),
-            legend_overrides_by_hex_code: self.settings.active.legend_overrides_by_hex_code.clone(),
+            legend_overrides_by_position,
+            legend_overrides_by_hex_code,
         };
 
         self.connect.pending_connect = Some(ConnectionTask::start(request));
