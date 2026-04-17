@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::key_matrix::KeyMatrix;
-use crate::layout_key::LayoutKey;
+use crate::layout_key::{Label, LayoutKey};
 use crate::protocols::{KeyboardLayout, KeyboardProtocol};
 
 pub struct Keyboard {
@@ -21,6 +22,8 @@ impl Keyboard {
         layout_name: String,
         timeout: i64,
         ctx: Option<eframe::egui::Context>,
+        overrides_by_position: HashMap<String, String>,
+        overrides_by_hex_code: HashMap<String, String>,
     ) -> Result<Self, String> {
         let definition = protocol.get_layout_definition();
 
@@ -32,7 +35,28 @@ impl Keyboard {
             .get_layer_count()
             .map_err(|e| format!("Failed to get layer count: {e}"))?;
 
-        let keys = protocol.read_all_keys(layers, definition.rows, definition.cols);
+        let mut keys = protocol.read_all_keys(layers, definition.rows, definition.cols);
+
+        // Apply general legend overrides
+        for layer_idx in 0..keys.len() {
+            for row_idx in 0..keys[layer_idx].len() {
+                for col_idx in 0..keys[layer_idx][row_idx].len() {
+                    if let Some(ref mut key) = keys[layer_idx][row_idx][col_idx] {
+                        let pos_key = format!("{}_{}_{}", layer_idx, row_idx, col_idx);
+
+                        // By-position takes precedence over by-hex-code
+                        if let Some(override_label) = overrides_by_position.get(&pos_key) {
+                            key.tap = Label::new(override_label.clone());
+                        } else if let Some(override_label) =
+                            overrides_by_hex_code.get(&key.tap.full)
+                        {
+                            key.tap = Label::new(override_label.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         let matrix = KeyMatrix::from_layout_keys(keys, definition.rows, definition.cols);
 
         let layer_state = Arc::new(Mutex::new(0));

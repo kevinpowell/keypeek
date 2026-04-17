@@ -1,4 +1,5 @@
 use ini::Ini;
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
@@ -182,6 +183,8 @@ pub struct Settings {
     pub margin: u32,
     pub opacity: f32,
     pub theme: ThemeSettings,
+    pub legend_overrides_by_position: HashMap<String, String>,
+    pub legend_overrides_by_hex_code: HashMap<String, String>,
 }
 
 impl Default for Settings {
@@ -195,6 +198,8 @@ impl Default for Settings {
             margin: 10,
             opacity: 1.0,
             theme: ThemeSettings::default(),
+            legend_overrides_by_position: HashMap::new(),
+            legend_overrides_by_hex_code: HashMap::new(),
         }
     }
 }
@@ -223,6 +228,17 @@ impl Settings {
             section.set(format!("border_color_{index}"), color.to_string());
         }
         section.set("font_color", self.theme.font_color.to_string());
+
+        let mut pos_section = conf.with_section(Some("legend_overrides_by_position"));
+        for (k, v) in &self.legend_overrides_by_position {
+            pos_section.set(k, v);
+        }
+
+        let mut hex_section = conf.with_section(Some("legend_overrides_by_hex_code"));
+        for (k, v) in &self.legend_overrides_by_hex_code {
+            hex_section.set(k, v);
+        }
+
         conf.write_to_file(path)
     }
 
@@ -283,6 +299,21 @@ impl Settings {
                 s.theme.font_color = parsed;
             }
         }
+
+        if let Some(pos_section) = conf.section(Some("legend_overrides_by_position")) {
+            for (k, v) in pos_section.iter() {
+                s.legend_overrides_by_position
+                    .insert(k.to_string(), v.to_string());
+            }
+        }
+
+        if let Some(hex_section) = conf.section(Some("legend_overrides_by_hex_code")) {
+            for (k, v) in hex_section.iter() {
+                s.legend_overrides_by_hex_code
+                    .insert(k.to_string(), v.to_string());
+            }
+        }
+
         Some(s)
     }
 }

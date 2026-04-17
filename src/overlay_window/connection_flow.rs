@@ -157,6 +157,8 @@ impl OverlayApp {
                 Some(self.session.draft_layout_name.clone())
             },
             ctx: Some(ctx.clone()),
+            legend_overrides_by_position: self.settings.active.legend_overrides_by_position.clone(),
+            legend_overrides_by_hex_code: self.settings.active.legend_overrides_by_hex_code.clone(),
         };
 
         self.connect.pending_connect = Some(ConnectionTask::start(request));

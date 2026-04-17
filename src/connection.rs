@@ -1,5 +1,6 @@
 use crate::keyboard::Keyboard;
 use crate::protocols::{connect_protocol, ConnectionSpec, KeyboardDefinition, KeyboardProtocol};
+use std::collections::HashMap;
 use std::sync::mpsc::{self, TryRecvError};
 
 const ZMK_LOCKED_ERROR: &str = "Device is locked. Please press the ZMK Studio unlock key combination on your keyboard, then click Connect again.";
@@ -9,6 +10,8 @@ pub struct ConnectionRequest {
     pub timeout: i64,
     pub layout_name: Option<String>,
     pub ctx: Option<eframe::egui::Context>,
+    pub legend_overrides_by_position: HashMap<String, String>,
+    pub legend_overrides_by_hex_code: HashMap<String, String>,
 }
 
 impl ConnectionRequest {
@@ -86,6 +89,8 @@ pub fn build_connected_state(request: ConnectionRequest) -> Result<ConnectedStat
         selected_layout_name.clone(),
         request.timeout,
         request.ctx,
+        request.legend_overrides_by_position,
+        request.legend_overrides_by_hex_code,
     )
     .map_err(|e| format!("Failed to create keyboard: {e}"))?;
 
