@@ -49,8 +49,19 @@ pub fn scan_serial_ports() -> Vec<ZmkSerialDevice> {
 }
 
 pub fn scan_ble_devices() -> Result<Vec<ZmkBleDevice>, Box<dyn Error>> {
-    let devices =
-        StudioClient::<PlatformBleTransport>::list_ble_devices_with_mode(BleDiscoveryMode::Any)?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let res =
+            StudioClient::<PlatformBleTransport>::list_ble_devices_with_mode(BleDiscoveryMode::Any);
+        let _ = tx.send(res);
+    });
+
+    let devices = match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+        Ok(Ok(devices)) => devices,
+        Ok(Err(e)) => return Err(e.into()),
+        Err(_) => return Err("BLE scan timed out".into()),
+    };
+
     Ok(devices
         .into_iter()
         .map(|device| {
